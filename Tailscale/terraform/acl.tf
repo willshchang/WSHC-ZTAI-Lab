@@ -127,6 +127,33 @@ resource "tailscale_acl" "policy" {
         src = [var.tag_server]
         dst = [var.home_subnet_cidr]
         ip  = ["*"]
+      },
+      # --------------------------------------------------------
+      # ITOps Engineer → Internet via exit node
+      # Allows all personal devices authenticated as admin_email
+      # to route traffic through an approved exit node.
+      #
+      # Why this grant is required:
+      # Tailscale is default deny — even approved exit nodes are
+      # invisible in the client dropdown without an explicit
+      # autogroup:internet grant. This is the unlock.
+      #
+      # autogroup:internet is a Tailscale built-in autogroup
+      # representing all internet-bound traffic routed via
+      # an exit node. No variable needed.
+      #
+      # Production expansion:
+      # Scope src to specific tags or groups if exit node
+      # access should be restricted to certain devices only:
+      # src = ["tag:mobile"] or src = ["group:contractors"]
+      #
+      # Official reference:
+      # https://tailscale.com/kb/1103/exit-nodes#allow-exit-nodes-using-acls
+      # --------------------------------------------------------
+      {
+        src = [var.admin_email]
+        dst = ["autogroup:internet"]
+        ip  = ["*"]
       }
       # --------------------------------------------------------
       # IMPLICIT DENIES — not written, Tailscale default:
@@ -182,7 +209,8 @@ resource "tailscale_acl" "policy" {
         accept = [
           "${var.tag_server}:22",
           "${var.tag_subnet_router}:80",
-          "192.168.1.1:80"
+          "192.168.1.1:80",
+          #"autogroup:internet:443"
         ]
         deny = []
       }
