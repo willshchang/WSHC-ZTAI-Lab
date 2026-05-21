@@ -99,17 +99,42 @@ Tags in Tailscale require an owner — who can assign the tag
 to devices. Without `tagOwners` defined, tags cannot be used 
 in grants.
 
+**This lab uses a manager tag pattern — not direct ownership:**
+
 ```json
 "tagOwners": {
-    "tag:server":        ["will.sh.chang@gmail.com"],
-    "tag:subnet-router": ["will.sh.chang@gmail.com"]
+    "tag:terraform":     ["will.sh.chang@gmail.com"],
+    "tag:server":        ["tag:terraform"],
+    "tag:subnet-router": ["tag:terraform"]
 }
 ```
 
-**What this means:**
-Only `will.sh.chang@gmail.com` can assign `tag:server` or 
-`tag:subnet-router` to devices. Prevents unauthorized devices 
-from claiming infrastructure roles.
+`admin_email` owns `tag:terraform`. `tag:terraform` owns 
+`tag:server` and `tag:subnet-router`. The Terraform OAuth client 
+is assigned `tag:terraform` in the admin console — giving it 
+authority to generate auth keys for infrastructure tags through 
+an unbroken ownership chain.
+
+**Why not assign `admin_email` directly to `tag:server`?**  
+For manual tagging this works — but Terraform's OAuth client 
+is not `admin_email`. When Terraform requests an auth key for 
+`tag:server`, Tailscale asks: "does the OAuth client own this 
+tag?" It needs to own it through the chain, not through you 
+personally.
+
+> **Analogy — gym franchise:**  
+> Corp wants to open 10 branches without dispatching corporate 
+> staff to each one. They hire a licensed contractor — but the 
+> contractor can only issue official location tags if Corp has 
+> credentialed them first. `admin_email` is Corp. `tag:terraform` 
+> is the credentialed contractor. `tag:server` is the location tag. 
+> Without the credential chain declared upfront, the enrollment 
+> is rejected — the branch can't open under the brand.
+
+**What this means in practice:**
+Only `tag:terraform` (and by extension the Terraform OAuth client) 
+can assign `tag:server` or `tag:subnet-router` to devices. 
+Prevents unauthorized devices from claiming infrastructure roles.
 
 **Important — tagging transfers ownership:**
 When a tag is applied to a device, ownership transfers from 
@@ -673,8 +698,11 @@ access too. Design both systems together.
 | Topic | URL |
 |---|---|
 | ACL policy syntax | https://tailscale.com/docs/reference/syntax/policy-file |
+| Tag owners syntax | https://tailscale.com/docs/reference/syntax/policy-file#tag-owners |
 | Tags | https://tailscale.com/kb/1068/acl-tags |
+| Tags and ownership | https://tailscale.com/docs/features/tags#ownership |
 | Access control | https://tailscale.com/docs/features/access-control |
+| Auth keys | https://tailscale.com/docs/features/access-control/auth-keys |
 | ACL examples | https://tailscale.com/docs/reference/examples/acls |
 | Grant examples | https://tailscale.com/docs/reference/examples/grants |
 | Groups in ACL | https://tailscale.com/kb/1337/acl-syntax#groups |
