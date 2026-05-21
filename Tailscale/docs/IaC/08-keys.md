@@ -81,19 +81,35 @@ one by running `terraform apply` again.
 
 **The problem:**
 The OAuth client cannot generate auth keys for `tag:server` unless 
-it owns that tag — but giving the OAuth client direct ownership of 
-`tag:server` creates a security concern.
+it owns that tag. But ownership cannot be assigned directly from 
+the OAuth client to `tag:server` — Tailscale requires a declared 
+manager tag as the intermediary.
 
 **The solution — manager tag pattern:**
-OAuth client → assigned tag:terraform (admin console)
-tag:terraform → owns tag:server (acl.tf tagOwners)
-tag:terraform → owns tag:subnet-router (acl.tf tagOwners)
+```
+admin_email → owns → tag:terraform (declared in tagOwners)
+tag:terraform → owns → tag:server (declared in tagOwners)
+tag:terraform → owns → tag:subnet-router (declared in tagOwners)
+OAuth client → assigned → tag:terraform (admin console)
+```
 
-The OAuth client owns `tag:terraform`. `tag:terraform` owns 
-`tag:server`. This chain gives Terraform permission to generate 
-auth keys tagged as `tag:server` without direct ownership.
+The OAuth client is assigned `tag:terraform` in the admin console. 
+`tag:terraform` owns `tag:server` and `tag:subnet-router` via 
+`tagOwners` in `acl.tf`. This gives Terraform the authority to 
+generate auth keys for infrastructure tags through an unbroken 
+ownership chain.
 
-> **Reference:** Known Tailscale OAuth limitation documented in:  
+> **Analogy — gym franchise:**  
+> Think of it like a gym franchise. Corp wants to open 10 new 
+> branches without dispatching corporate staff to each one. They 
+> hire a licensed contractor — but the contractor can only issue 
+> official location tags if Corp has credentialed them first.  
+> `admin_email` is Corp. `tag:terraform` is the credentialed 
+> contractor. `tag:server` is the location tag. Without the 
+> credential chain declared upfront, the enrollment is rejected — 
+> the branch can't open under the brand.
+
+> **Known Tailscale OAuth limitation:**  
 > https://github.com/tailscale/tailscale/issues/8299  
 > https://github.com/tailscale/tailscale/issues/15456
 
@@ -154,5 +170,8 @@ resource "tailscale_tailnet_key" "staging_key" {
 | Topic | URL |
 |---|---|
 | Auth keys | https://tailscale.com/kb/1085/auth-keys |
+| Auth keys (features) | https://tailscale.com/docs/features/access-control/auth-keys |
 | Tailnet key resource | https://registry.terraform.io/providers/tailscale/tailscale/latest/docs/resources/tailnet_key |
 | OAuth tag ownership | https://github.com/tailscale/tailscale/issues/8299 |
+| Tag owners syntax | https://tailscale.com/docs/reference/syntax/policy-file#tag-owners |
+| Tags and ownership | https://tailscale.com/docs/features/tags#ownership |
