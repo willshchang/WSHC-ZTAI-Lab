@@ -1,11 +1,10 @@
 # Tailscale Subnet Router — Setup and Troubleshooting
 
 **Document Type:** Admin Technical Reference  
-**Author:** Will Chang, Tailscale Customer Success Engineer  
-**Audience:** IT Administrator / Tailscale CSE Reference  
-**Last Updated:** April 2026  
+**Author:** Will Chang, Zero Trust AI Engineer  
+**Audience:** IT Administrator  
+**Last Updated:** September 2026  
 **Repository:** https://github.com/willshchang/WSHC-ZeroTrust-IaC-Lab  
-**Official Reference:** https://tailscale.com/docs/features/subnet-routers
 
 ---
 
@@ -791,7 +790,7 @@ https://tailscale.com/docs/account/bug-report
 
 ---
 
-## Key Lessons Learned
+## Known Issues and Design Notes
 
 **1. Use the right diagnostic layer**
 `ip route show` is for kernel routing — not Tailscale routing. 

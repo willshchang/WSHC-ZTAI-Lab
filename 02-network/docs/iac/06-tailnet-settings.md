@@ -1,11 +1,10 @@
 # Tailscale IaC — tailnet_settings.tf
 
 **Document Type:** IaC Reference  
-**Author:** Will Chang, Customer Success Engineer  
-**Audience:** IT Administrator / Tailscale CSE Reference  
-**Last Updated:** April 2026  
+**Author:** Will Chang, Zero Trust AI Engineer  
+**Audience:** IT Administrator  
+**Last Updated:** September 2026  
 **Repository:** https://github.com/willshchang/WSHC-ZeroTrust-IaC-Lab  
-**Official Reference:** https://registry.terraform.io/providers/tailscale/tailscale/latest/docs/resources/tailnet_settings
 
 ---
 

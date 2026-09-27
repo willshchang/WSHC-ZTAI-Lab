@@ -1,11 +1,10 @@
 # Tailscale IaC — Overview
 
 **Document Type:** IaC Reference  
-**Author:** Will Chang, Customer Success Engineer  
-**Audience:** IT Administrator / Tailscale CSE Reference  
-**Last Updated:** April 2026  
+**Author:** Will Chang, Zero Trust AI Engineer  
+**Audience:** IT Administrator  
+**Last Updated:** September 2026  
 **Repository:** https://github.com/willshchang/WSHC-ZeroTrust-IaC-Lab  
-**Official Reference:** https://tailscale.com/kb/1210/terraform-provider
 
 ---
 
@@ -104,7 +103,7 @@ cp terraform.tfvars.example terraform.tfvars
 ## Deployment
 
 ```bash
-cd Tailscale/terraform
+cd 02-network/terraform
 
 terraform init      # download Tailscale provider
 terraform fmt       # fix formatting

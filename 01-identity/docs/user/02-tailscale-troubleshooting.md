@@ -1,10 +1,10 @@
 # TinyCo — Tailscale VPN Troubleshooting Guide
 
 **Document Type:** User Documentation  
-**Author:** Will Chang, Sr. IT Operations Engineer  
-**Audience:** All TinyCo Employees  
-**Last Updated:** April 2026  
-**Reference:** https://tailscale.com/kb/
+**Author:** Will Chang, Zero Trust AI Engineer  
+**Audience:** End User  
+**Last Updated:** September 2026  
+**Repository:** https://github.com/willshchang/WSHC-ZeroTrust-IaC-Lab  
 
 ---
 
@@ -13,7 +13,7 @@
 This guide covers the most common Tailscale VPN issues TinyCo 
 employees encounter and how to resolve them. If your issue is 
 not listed here, contact ITOps via Mattermost `#it-support` 
-or email `itops@TinyCoDDG.onmicrosoft.com`.
+or email `itops@<tenant>.onmicrosoft.com`.
 
 ---
 
@@ -23,7 +23,7 @@ Before contacting ITOps, run through this checklist:
 
 - [ ] Tailscale is installed on your device
 - [ ] You are signed in with your TinyCo email 
-      (`firstname.lastname@TinyCoDDG.onmicrosoft.com`)
+      (`firstname.lastname@<tenant>.onmicrosoft.com`)
 - [ ] Tailscale shows **Connected** in your system tray
 - [ ] You can see `tinyco-vm` listed as a connected machine 
       in Tailscale
@@ -83,7 +83,7 @@ in again, or shows an authentication error.
 1. Click the Tailscale icon → **Log in**
 2. Select **Sign in with Microsoft**
 3. Sign in with your TinyCo email:
-firstname.lastname@TinyCoDDG.onmicrosoft.com
+firstname.lastname@<tenant>.onmicrosoft.com
 4. Approve the MFA (Multi-Factor Authentication) prompt on 
    your phone
 5. Wait 10–15 seconds for the connection to establish
@@ -270,4 +270,13 @@ speed up resolution:
 
 **Contact:**
 - **Mattermost:** `#it-support` channel
-- **Email:** `itops@TinyCoDDG.onmicrosoft.com`
+- **Email:** `itops@<tenant>.onmicrosoft.com`
+
+---
+
+## Official References
+
+| Topic | URL |
+|---|---|
+| Tailscale Knowledge Base | https://tailscale.com/kb/ |
+| Tailscale with Microsoft Entra ID | https://tailscale.com/docs/integrations/identity/entra |

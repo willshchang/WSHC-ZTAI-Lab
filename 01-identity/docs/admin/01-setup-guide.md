@@ -1,10 +1,10 @@
 # TinyCo Entra ID — Setup & Recreation Guide
 
 **Document Type:** Admin Documentation  
-**Author:** Will Chang, Sr. IT Operations Engineer  
-**Audience:** TinyCo IT Administrator  
-**Last Updated:** April 2026  
-**Repository:** https://github.com/willshchang/WSHC-Entra-IaC-Zero-Trust-Lab
+**Author:** Will Chang, Zero Trust AI Engineer  
+**Audience:** IT Administrator  
+**Last Updated:** September 2026  
+**Repository:** https://github.com/willshchang/WSHC-ZeroTrust-IaC-Lab  
 
 ---
 
@@ -15,12 +15,12 @@ the TinyCo Microsoft Entra ID (formerly Azure Active Directory)
 environment from scratch using the provided Terraform (IaC — 
 Infrastructure as Code) code.
 
-A reviewer or administrator following this guide should be able to 
+An administrator following this guide should be able to 
 fully reproduce the environment with no prior knowledge of how it 
 was originally built.
 
 **What this guide deploys:**
-- 89 TinyCo employee accounts across 9 teams
+- 89 employee accounts from the HR feed plus the ITOps admin (90 people) across 9 teams
 - 9 Entra security groups with dynamic membership
 - Full RBAC (Role-Based Access Control) model
 - Conditional Access (CA) policies enforcing MFA tenant-wide
@@ -70,9 +70,9 @@ see [ARCHITECTURE.md](../ARCHITECTURE.md).
 1. Go to **microsoft.com/en-us/microsoft-365/enterprise/office-365-e5**
 2. Click **Try for free** → sign up with a new email
 3. Choose your tenant domain — this guide uses 
-   `TinyCoDDG.onmicrosoft.com`
+   `<tenant>.onmicrosoft.com`
 4. Complete setup — your admin account will be 
-   `WC@TinyCoDDG.onmicrosoft.com`
+   `<admin>@<tenant>.onmicrosoft.com`
 
 ### 1.2 Link Azure Free Account
 
@@ -84,7 +84,7 @@ see [ARCHITECTURE.md](../ARCHITECTURE.md).
 ### 1.3 Create Tailscale Account
 
 1. Go to **tailscale.com** → click **Get Started**
-2. Sign in using **Microsoft** (`WC@TinyCoDDG.onmicrosoft.com`)
+2. Sign in using **Microsoft** (`<admin>@<tenant>.onmicrosoft.com`)
 
 > **Why sign in with Microsoft?** Using your M365 identity from the 
 > start makes SSO wiring significantly cleaner — Tailscale 
@@ -198,7 +198,7 @@ Verify:
 az account show
 ```
 
-Confirm `tenantDefaultDomain` shows `TinyCoDDG.onmicrosoft.com`
+Confirm `tenantDefaultDomain` shows `<tenant>.onmicrosoft.com`
 
 ---
 
@@ -276,11 +276,11 @@ admin_password  = "YOUR_CHOSEN_PASSWORD"
 
 # Company identity
 company_name = "TinyCo"
-domain_name  = "TinyCoDDG.onmicrosoft.com"
+domain_name  = "<tenant>.onmicrosoft.com"
 
 # Admin accounts
-primary_admin_upn     = "WC@TinyCoDDG.onmicrosoft.com"
-grader_account_prefix = "admin.test"
+primary_admin_upn     = "<admin>@<tenant>.onmicrosoft.com"
+breakglass_account_prefix = "admin.test"
 
 # Entra ID directory roles
 entra_role_map = {
@@ -301,7 +301,7 @@ azure_role_map = {
 |---|---|
 | Tenant ID | `42a9915e-aa4a-4426-9a86-a04a0dac6222` |
 | Subscription ID | `29923100-cb5f-44bc-aec9-1207134ba164` |
-| Tenant Domain | `TinyCoDDG.onmicrosoft.com` |
+| Tenant Domain | `<tenant>.onmicrosoft.com` |
 
 > **Security note:** `terraform.tfvars` is listed in `.gitignore` 
 > and will never be pushed to GitHub. It contains sensitive 
@@ -378,10 +378,7 @@ for HTTPS termination.
 
 **Prerequisites:** Azure VM must be running and Tailscale connected.
 
-Full setup documented in: 
-[Mattermost SSO Troubleshooting](./troubleshooting/mattermost-sso-troubleshooting.md)
-
-**Access URL:** `https://tinyco-vm.hair-squeaker.ts.net/tinycoddg`
+**Access URL:** `https://tinyco-vm.hair-squeaker.ts.net/<team-name>`
 
 ### 7.3 Tableau Cloud
 
@@ -390,9 +387,6 @@ Full setup documented in:
 2. **Single sign-on** → **SAML** → configure using metadata exchange
 3. In **Tableau Cloud** → **Settings** → **Authentication** → 
    upload Entra Federation Metadata XML
-
-Full setup documented in:
-[Tableau SSO Troubleshooting](./troubleshooting/tableau-sso-troubleshooting.md)
 
 **SSO URL:** `https://sso.online.tableau.com/public/idp/SSO`
 
@@ -414,7 +408,7 @@ Full setup documented in:
 
 | Check | Location | Expected |
 |---|---|---|
-| Users | Entra → Users | 91 users (89 employees + admin + break-glass) |
+| Users | Entra → Users | 91 users (90 people + break-glass account) |
 | Groups | Entra → Groups | 11+ groups (9 TinyCo dynamic + admin static groups) |
 | Enterprise Apps | Entra → Enterprise Applications | 14 TinyCo apps visible |
 | Conditional Access | Entra → Security → Conditional Access | 2 policies active |
@@ -452,10 +446,21 @@ Full setup documented in:
 |---|---|
 | Tenant ID | `42a9915e-aa4a-4426-9a86-a04a0dac6222` |
 | Subscription ID | `29923100-cb5f-44bc-aec9-1207134ba164` |
-| Tenant Domain | `TinyCoDDG.onmicrosoft.com` |
-| Admin Account | `WC@TinyCoDDG.onmicrosoft.com` |
-| Break-glass Account | `admin.test@TinyCoDDG.onmicrosoft.com` |
+| Tenant Domain | `<tenant>.onmicrosoft.com` |
+| Admin Account | `<admin>@<tenant>.onmicrosoft.com` |
+| Break-glass Account | `admin.test@<tenant>.onmicrosoft.com` |
 | VM Public IP | `20.63.73.34` |
 | VM Tailscale IP | `100.83.194.101` |
 | Tailscale Hostname | `tinyco-vm.hair-squeaker.ts.net` |
-| Break-glass Password | Delivered via submission notes |
+| Break-glass Password | Stored outside the repo in a password manager |
+
+---
+
+## Official References
+
+| Topic | URL |
+|---|---|
+| Terraform azuread provider | https://registry.terraform.io/providers/hashicorp/azuread/latest/docs |
+| Terraform azurerm provider | https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs |
+| Entra application gallery | https://learn.microsoft.com/en-us/entra/identity/enterprise-apps/overview-application-gallery |
+| Tailscale with Microsoft Entra ID | https://tailscale.com/docs/integrations/identity/entra |

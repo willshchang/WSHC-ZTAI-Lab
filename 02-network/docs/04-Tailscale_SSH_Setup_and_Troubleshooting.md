@@ -1,11 +1,10 @@
 # Tailscale SSH Setup and Troubleshooting
 
 **Document Type:** Admin Technical Reference  
-**Author:** Will Chang, Tailscale Customer Success Engineer  
-**Audience:** IT Administrator / Tailscale CSE Reference  
-**Last Updated:** April 2026  
+**Author:** Will Chang, Zero Trust AI Engineer  
+**Audience:** IT Administrator  
+**Last Updated:** September 2026  
 **Repository:** https://github.com/willshchang/WSHC-ZeroTrust-IaC-Lab  
-**Official Reference:** https://tailscale.com/docs/features/tailscale-ssh
 
 ---
 
@@ -17,8 +16,8 @@ identity and why Linux usernames are still required even with
 identity-based authentication.
 
 For network architecture and ACL policy context, see:
-- [02-Tailscale_ACL_Tags_and_Access_Control.md](./02-Tailscale_ACL_Tags_and_Access_Control.md)
-- [03-Tailscale_Network_Architecture.md](./03-Tailscale_Network_Architecture.md)
+- [02-ACL_Tags_and_Access_Control.md](./02-ACL_Tags_and_Access_Control.md)
+- [03-Network_Architecture.md](./03-Network_Architecture.md)
 
 ---
 
@@ -200,7 +199,7 @@ immediately after tagging:
 ]
 ```
 
-> **Lesson learned:** Tag before grant = instant lockout. 
+> **Warning:** Tag before grant = instant lockout. 
 > Always write and save ACL grants before applying tags 
 > to devices.
 
@@ -246,7 +245,7 @@ https://tailscale.com/kb/1337/acl-syntax
 
 ---
 
-## Key Lessons
+## Known Issues and Design Notes
 
 **1. Tailscale SSH = authentication without keys**
 It verifies your identity so you don't need SSH keys. 

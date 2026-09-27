@@ -1,9 +1,10 @@
 # TinyCo — Employee Getting Started Guide
 
 **Document Type:** User Documentation  
-**Author:** Will Chang, Sr. IT Operations Engineer  
-**Audience:** All TinyCo Employees  
-**Last Updated:** April 2026
+**Author:** Will Chang, Zero Trust AI Engineer  
+**Audience:** End User  
+**Last Updated:** September 2026  
+**Repository:** https://github.com/willshchang/WSHC-ZeroTrust-IaC-Lab  
 
 ---
 
@@ -14,7 +15,7 @@ first day. Your IT team has already created your account —
 you just need to activate it and connect to your apps.
 
 **What you need:**
-- Your TinyCo email: `firstname.lastname@TinyCoDDG.onmicrosoft.com`
+- Your TinyCo email: `firstname.lastname@<tenant>.onmicrosoft.com`
 - Your temporary password (provided by ITOps via secure channel)
 - A smartphone for MFA (Multi-Factor Authentication) setup
 
@@ -87,7 +88,7 @@ Download for your device:
 2. Click **Log in**
 3. Select **Sign in with Microsoft**
 4. Sign in with your TinyCo email 
-   (`firstname.lastname@TinyCoDDG.onmicrosoft.com`)
+   (`firstname.lastname@<tenant>.onmicrosoft.com`)
 5. Approve the MFA prompt on your phone
 6. You are now connected to TinyCo's private network
 
@@ -108,7 +109,7 @@ equivalent to Slack.
 
 1. Ensure Tailscale shows **Connected** in your system tray
 2. Open your browser and go to:
-https://tinyco-vm.hair-squeaker.ts.net/tinycoddg
+https://tinyco-vm.hair-squeaker.ts.net/<team-name>
 3. Click **Sign in with Entra ID**
 4. Sign in with your TinyCo email
 5. Approve the MFA prompt on your phone
@@ -156,7 +157,7 @@ and log analysis. Access is provided to relevant teams only.
 
 | Item | Value |
 |---|---|
-| Email | `firstname.lastname@TinyCoDDG.onmicrosoft.com` |
+| Email | `firstname.lastname@<tenant>.onmicrosoft.com` |
 | MFA method | Microsoft Authenticator (required) |
 | Password reset | https://aka.ms/sspr |
 | Account portal | https://myaccount.microsoft.com |
@@ -173,10 +174,19 @@ and log analysis. Access is provided to relevant teams only.
 Contact the ITOps team:
 
 - **Mattermost:** `#it-support` channel
-- **Email:** `itops@TinyCoDDG.onmicrosoft.com`
+- **Email:** `itops@<tenant>.onmicrosoft.com`
 
 When contacting ITOps, please include:
 - Your TinyCo email address
 - The app you are trying to access
 - A screenshot of any error message
 - Steps you have already tried
+
+---
+
+## Official References
+
+| Topic | URL |
+|---|---|
+| Download Tailscale | https://tailscale.com/download |
+| Tailscale with Microsoft Entra ID | https://tailscale.com/docs/integrations/identity/entra |

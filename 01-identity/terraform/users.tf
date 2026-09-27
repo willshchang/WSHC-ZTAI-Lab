@@ -29,7 +29,7 @@ resource "azuread_user" "employees" {
   for_each = local.employees
 
   # [ID & IDENTITY]
-  # Username format: firstname.lastname@TinyCoDDG.onmicrosoft.com
+  # Username format: firstname.lastname@<tenant>.onmicrosoft.com
   user_principal_name = "${each.key}@${var.domain_name}"
   display_name        = "${each.value.first_name} ${each.value.last_name}"
   mail_nickname       = each.key
@@ -67,22 +67,22 @@ data "azuread_user" "primary_admin" {
 }
 
 # ============================================================
-# BREAK-GLASS / GRADER TESTING ACCOUNT (DYNAMIC NAME)
+# BREAK-GLASS EMERGENCY ACCESS ACCOUNT (DYNAMIC NAME)
 # ============================================================
 # This resource uses string functions to split the prefix (e.g., "admin.test")
 # into First and Last names, ensuring NO hardcoded strings exist.
 
 resource "azuread_user" "breakglass" {
-  user_principal_name = "${var.grader_account_prefix}@${var.domain_name}"
-  mail_nickname       = var.grader_account_prefix
+  user_principal_name = "${var.breakglass_account_prefix}@${var.domain_name}"
+  mail_nickname       = var.breakglass_account_prefix
 
   # Dynamically split "admin.test" into "Admin" and "Test"
   # title() capitalizes the first letter; split() breaks the string at the dot
-  display_name = title(replace(var.grader_account_prefix, ".", " "))
-  given_name   = title(split(".", var.grader_account_prefix)[0])
-  surname      = title(split(".", var.grader_account_prefix)[1])
+  display_name = title(replace(var.breakglass_account_prefix, ".", " "))
+  given_name   = title(split(".", var.breakglass_account_prefix)[0])
+  surname      = title(split(".", var.breakglass_account_prefix)[1])
 
-  mail = "${var.grader_account_prefix}@${var.domain_name}"
+  mail = "${var.breakglass_account_prefix}@${var.domain_name}"
 
   # Password & Security Settings
   password              = var.admin_password

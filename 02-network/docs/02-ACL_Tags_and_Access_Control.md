@@ -1,11 +1,10 @@
 # Tailscale ACL, Tags and Access Control
 
 **Document Type:** Admin Technical Reference  
-**Author:** Will Chang, Tailscale Customer Success Engineer  
-**Audience:** IT Administrator / Tailscale CSE Reference  
-**Last Updated:** April 2026  
+**Author:** Will Chang, Zero Trust AI Engineer  
+**Audience:** IT Administrator  
+**Last Updated:** September 2026  
 **Repository:** https://github.com/willshchang/WSHC-ZeroTrust-IaC-Lab  
-**Official Reference:** https://tailscale.com/docs/features/access-control
 
 ---
 
@@ -580,25 +579,6 @@ nothing — you only reach what your identity explicitly permits.
 
 ---
 
-### Interview Framing
-
-When a customer asks:
-> *"How do I stop my branch office from accessing HQ 
-> resources over Tailscale?"*
-
-Your answer:
-> *"By default Tailscale allows all tailnet devices to 
-> reach each other. We replace that with explicit grants — 
-> branch staff get a grant to their own subnet only. 
-> HQ subnet is never listed as a destination for branch 
-> staff, so it's implicitly denied. No block rules needed — 
-> Tailscale's default deny handles it automatically."*
-
-This demonstrates you understand both the product and the 
-Zero Trust principle behind it. 🚀
-
----
-
 ### Multi-user groups mirroring Entra ID
 
 ```json
@@ -667,7 +647,7 @@ entire Zero Trust stack.
 
 ---
 
-## Key Lessons Learned
+## Known Issues and Design Notes
 
 **1. Tag before you grant — but define grants before tagging**
 Write the ACL with grants first, then tag devices. Tagging 

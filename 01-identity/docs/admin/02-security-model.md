@@ -1,10 +1,10 @@
 # TinyCo Entra ID — Security & Privilege Model
 
 **Document Type:** Admin Documentation  
-**Author:** Will Chang, Sr. IT Operations Engineer  
-**Audience:** TinyCo IT Administrator  
-**Last Updated:** April 2026  
-**Repository:** https://github.com/willshchang/WSHC-Entra-IaC-Zero-Trust-Lab
+**Author:** Will Chang, Zero Trust AI Engineer  
+**Audience:** IT Administrator  
+**Last Updated:** September 2026  
+**Repository:** https://github.com/willshchang/WSHC-ZeroTrust-IaC-Lab  
 
 ---
 
@@ -19,7 +19,7 @@ perform their role, nothing more.
 For the full architectural rationale and design decisions behind 
 this model, see [ARCHITECTURE.md](../ARCHITECTURE.md).
 
-![TinyCo Security Architecture](../tinyco_security_architecture.png) 
+![TinyCo Security Architecture](../../../docs/diagrams/tinyco_security_architecture.png) 
 [Showing Zero Trust two-layer model — Tailscale gates internal, Entra SSO gates SaaS]
 
 ---
@@ -50,20 +50,20 @@ evaluated by Conditional Access (CA) before access is granted.
 ### Zero Trust — Two Layers
 TinyCo implements a two-layer Zero Trust model:
 
-**Layer 1 — Network (Tailscale)**
+**Layer 1 — Identity (Entra ID SSO)**
+Cloud SaaS applications (Tableau, Elastic) are protected by Entra 
+ID SSO via SAML (Security Assertion Markup Language) or OIDC 
+(OpenID Connect). MFA (Multi-Factor Authentication) is enforced 
+on every sign-in via Conditional Access policy.
+
+**Layer 2 — Network (Tailscale)**
 Internal resources (Azure VM, Mattermost) are unreachable from the 
 public internet. SSH port 22 is closed in the Azure Network Security 
 Group (NSG). Access requires an active Tailscale VPN connection 
 authenticated via Entra ID. Even an attacker with valid credentials 
 cannot reach internal resources without being on the Tailscale network.
 
-**Layer 2 — Identity (Entra ID SSO)**
-Cloud SaaS applications (Tableau, Elastic) are protected by Entra 
-ID SSO via SAML (Security Assertion Markup Language) or OIDC 
-(OpenID Connect). MFA (Multi-Factor Authentication) is enforced 
-on every sign-in via Conditional Access policy.
-
-![TinyCo Security Architecture](../tinyco_security_architecture.png)
+![TinyCo Security Architecture](../../../docs/diagrams/tinyco_security_architecture.png)
 
 ---
 
@@ -206,12 +206,12 @@ of more granular, auditable custom policies.
 
 ## Break-Glass Account
 
-**Account:** `admin.test@TinyCoDDG.onmicrosoft.com`  
+**Account:** `admin.test@<tenant>.onmicrosoft.com`  
 **Role:** Global Administrator  
-**Purpose:** Emergency access and lab reviewer testing  
-**Password:** Delivered via submission notes
+**Purpose:** Emergency access when all other admin accounts are unavailable  
+**Password:** Stored outside the repo in a password manager
 
-NOTE: Tailscale admin console access must be granted manually after the reviewer's first login by an existing admin or owner.
+NOTE: Tailscale admin console access must be granted manually after the break-glass account's first login by an existing admin or owner.
 — Go to login.tailscale.com/admin/users and change the account role to Admin.
 
 ### What is a Break-Glass Account?
@@ -228,7 +228,7 @@ The break-glass account is a member of the
 `Security-Exclusion-Emergency` group, which is excluded from both 
 CA policies. This ensures:
 
-- Lab reviewers can log in without MFA configured on their device
+- An emergency admin can sign in even if their MFA device is lost or unavailable
 - In a real emergency where all other admin accounts are locked, 
   this account provides guaranteed access to the tenant
 
@@ -253,10 +253,9 @@ decision:
 > effect and no MFA is required on subsequent logins. This 
 > confirms the CA exclusion is working correctly.
 
-**For lab reviewer:** When logging in with the break-glass account 
-for the first time, Microsoft Authenticator setup will be prompted. 
-You may skip this prompt — it does not affect your ability to 
-access and inspect the tenant.
+**First sign-in:** On the break-glass account's first sign-in, 
+Microsoft Authenticator setup will be prompted. It can be skipped 
+and does not affect access to the tenant.
 
 ### Production Enhancement
 
@@ -268,23 +267,23 @@ record of every emergency activation.
 
 ---
 
-## Real-World Context
+## Scalability
 
 This security model was designed with TinyCo's growth trajectory 
-in mind. At 89 users across 9 teams today, the group-based access 
+in mind. At 90 users across 9 teams today, the group-based access 
 model is already structured to scale to 300+ users without 
 architectural changes.
 
-At Alberta Health Services, managing identity for 160,000 users 
-across enterprise and clinical environments where least-privilege 
-and audit trails were required by healthcare compliance standards 
-directly informed the decisions made here:
+---
 
-- Group-based access over individual assignments for auditability
-- Clear separation between identity administration (ITOps) and 
-  cloud resource management (SRE)
-- Read-only audit roles for Security to enable oversight without risk
-- A break-glass account following Microsoft's own recommendations
+## Official References
 
-The same principles that protect patient data at a 160,000-user 
-healthcare organisation apply equally to protecting user privacy 
+| Topic | URL |
+|---|---|
+| Role-assignable groups | https://learn.microsoft.com/en-us/entra/identity/role-based-access-control/groups-concept |
+| Conditional Access overview | https://learn.microsoft.com/en-us/entra/identity/conditional-access/overview |
+| Require MFA for all users | https://learn.microsoft.com/en-us/entra/identity/conditional-access/policy-all-users-mfa-strength |
+| Block legacy authentication | https://learn.microsoft.com/en-us/entra/identity/conditional-access/policy-block-legacy-authentication |
+| Security defaults | https://learn.microsoft.com/en-us/entra/fundamentals/security-defaults |
+| Emergency access accounts | https://learn.microsoft.com/en-us/entra/identity/role-based-access-control/security-emergency-access |
+| PIM for Groups | https://learn.microsoft.com/en-us/entra/id-governance/privileged-identity-management/concept-pim-for-groups |

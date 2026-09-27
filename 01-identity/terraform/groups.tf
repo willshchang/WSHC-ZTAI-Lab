@@ -55,13 +55,22 @@ resource "azuread_group" "teams" {
 resource "azuread_group" "security_exclusion" {
   display_name     = "Security-Exclusion-Emergency"
   security_enabled = true
-  description      = "Generic exclusion group for security policy bypass (Grader/Breakglass Access)."
+  description      = "Generic exclusion group for security policy bypass (break-glass emergency access)."
 }
 
-# Manually place the admin.test account into the exclusion group
-resource "azuread_group_member" "grader_access" {
+# Place the break-glass account into the exclusion group
+resource "azuread_group_member" "breakglass_access" {
   group_object_id  = azuread_group.security_exclusion.object_id
   member_object_id = azuread_user.breakglass.object_id
+}
+
+# Resource renamed from grader_access to breakglass_access.
+# WHY: the moved block tells Terraform this is the same group
+# membership under a new name, so it updates state instead of
+# deleting and recreating the break-glass exclusion.
+moved {
+  from = azuread_group_member.grader_access
+  to   = azuread_group_member.breakglass_access
 }
 
 # ============================================================

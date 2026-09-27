@@ -6,7 +6,6 @@
 **Author:** Will Chang, Zero Trust AI Engineer  
 **Last Updated:** September 2026  
 **Repository:** https://github.com/willshchang/WSHC-ZeroTrust-IaC-Lab  
-**Official Reference:** https://csrc.nist.gov/pubs/sp/800/207/final
 
 ---
 
@@ -141,6 +140,7 @@ WSHC-ZeroTrust-IaC-Lab/
 │   └── docs/                ← architecture, admin and end-user guides
 │
 ├── 02-network/              ← Layer 2: Tailscale
+│   ├── README.md
 │   ├── terraform/           ← ACL, tags, DNS, settings, subnet routes, auth keys
 │   └── docs/                ← subnet routing, ACL, network architecture, Tailscale SSH
 │       └── iac/             ← one doc per Terraform file
@@ -214,7 +214,7 @@ Each layer has its own full setup guide:
 | Layer | Start here |
 |---|---|
 | Layer 1: Identity | [01-identity/README.md](./01-identity/README.md) |
-| Layer 2: Network | [02-network/docs/iac/00-IaC-Overview.md](./02-network/docs/iac/00-IaC-Overview.md) |
+| Layer 2: Network | [02-network/README.md](./02-network/README.md) |
 
 Both layers deploy the same way once their prerequisites and
 `terraform.tfvars` are in place:

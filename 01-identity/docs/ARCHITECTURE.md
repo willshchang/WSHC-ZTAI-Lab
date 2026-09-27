@@ -1,10 +1,10 @@
 # TinyCo Entra ID — Architecture & Technical Design
 
 **Document Type:** Technical Architecture  
-**Author:** Will Chang, Sr. IT Operations Engineer  
-**Audience:** Reviewer  
-**Last Updated:** April 2026  
-**Repository:** https://github.com/willshchang/WSHC-Entra-IaC-Zero-Trust-Lab
+**Author:** Will Chang, Zero Trust AI Engineer  
+**Audience:** IT Administrator  
+**Last Updated:** September 2026  
+**Repository:** https://github.com/willshchang/WSHC-ZeroTrust-IaC-Lab  
 
 ---
 
@@ -15,9 +15,6 @@ This document is the technical bible for TinyCo's Microsoft Entra ID
 every major architectural decision made during the project, the 
 reasoning behind each decision, and what a production-grade version 
 of this environment would look like with more time and budget.
-
-For how it went and what I would do differently, see 
-[RETROSPECTIVE.md](./RETROSPECTIVE.md).
 
 For operational procedures (provisioning, deprovisioning, app 
 management), see [Admin Documentation](./admin/).
@@ -99,7 +96,7 @@ SCIM sync (Tableau only, ~40 min)
 ↓ account pre-created before first login
 Full access granted
 ```
-![TinyCo Identity Journey](./tinyco_identity_journey.png)
+![TinyCo Identity Journey](../../docs/diagrams/tinyco_identity_journey.png)
 
 ---
 
@@ -277,7 +274,7 @@ User's access reflects their current role — zero IT intervention
 | **Dynamic group membership** | ABAC rule evaluates `department` attribute | `terraform apply` writes new department value |
 | **New team auto-discovery** | `distinct()` scans CSV for unique teams | New team name added to CSV |
 | **App access matrix expansion** | `setproduct()` includes new groups automatically | New group created from CSV |
-| **Break-glass name derivation** | `title(split(".", prefix))` generates display name | `grader_account_prefix` changed in tfvars |
+| **Break-glass name derivation** | `title(split(".", prefix))` generates display name | `breakglass_account_prefix` changed in tfvars |
 | **CA exclusion inheritance** | Group membership triggers policy exclusion | User added to Security-Exclusion-Emergency |
 | **Attribute enrichment cascade** | One CSV `team` value writes `department` + `job_title` | Single CSV column change |
 
@@ -301,16 +298,16 @@ Custom app registrations require manual configuration of all of the
 above and default to OIDC — which is not always compatible with the 
 app's SSO requirements.
 
-### Our Mistake — Lesson Learned
+### Why Gallery-First
 
-During the initial lab phase, all four apps (Tailscale, Mattermost, 
+In an early build, all four apps (Tailscale, Mattermost, 
 Tableau, Elastic) were registered as custom OIDC apps via Terraform's 
 `azuread_application` resource. This caused:
 
 - Tableau SSO failures (SAML required, OIDC registered)
 - Mattermost OAuth errors (SSL detection issues with OIDC flow)
 - Elastic permission errors (custom app missing pre-consented permissions)
-- Days of debugging that would have been avoided with gallery registration
+- Extended debugging that gallery registration avoids entirely
 
 ### App Registration Decision Matrix
 
@@ -510,7 +507,7 @@ production deployment.
   Tailscale Serve as an HTTPS workaround.
 
 - **Professional email domain** — `@tinyco.com` instead of 
-  `@TinyCoDDG.onmicrosoft.com` for all user accounts.
+  `@<tenant>.onmicrosoft.com` for all user accounts.
 
 ### 2. Tailscale Enterprise Plan
 

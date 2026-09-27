@@ -6,7 +6,7 @@
 # from the incoming/ dropzone, sanitizes them, and stages them 
 # safely in the data/ folder for Terraform to consume.
 
-echo "Starting DDG HR Data Pipeline..."
+echo "Starting HR Data Pipeline..."
 
 # [1. EXTRACT] - Safely locate the files in the dropzone
 EMP_FILE=$(find incoming/ -iname "*employee*.csv" | head -n 1)

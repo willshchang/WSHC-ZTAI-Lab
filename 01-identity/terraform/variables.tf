@@ -2,9 +2,16 @@
 # This file defines all the input variables Terraform needs to connect to Azure.
 # Think of it as the "settings panel" — no resources are created here.
 # The actual values are stored in terraform.tfvars (which never goes to GitHub).
+#
+# DEPLOYMENT HISTORY
+# This layer was deployed and validated on the tenant
+# TinyCoDDG.onmicrosoft.com during the Microsoft 365 E5 trial
+# (late spring 2026). The trial has since ended. No tenant
+# values are hardcoded here, so the same code deploys to any
+# tenant by changing terraform.tfvars.
 
 variable "tenant_id" {
-  description = "The unique ID of your Azure/Entra tenant (TinyCoDDG)"
+  description = "The unique ID of your Azure/Entra tenant"
   type        = string
 }
 
@@ -33,7 +40,7 @@ variable "company_name" {
 }
 
 variable "domain_name" {
-  description = "The primary Entra ID domain (e.g., TinyCoDDG.onmicrosoft.com)"
+  description = "The primary Entra ID domain (e.g., <tenant>.onmicrosoft.com)"
   type        = string
 }
 
@@ -73,8 +80,8 @@ variable "primary_admin_upn" {
 # This tells Terraform to expect the email address of 
 # the existing admin, but doesn't reveal what it is.
 
-variable "grader_account_prefix" {
-  description = "The username prefix for the emergency/grader account (e.g., admin.test)"
+variable "breakglass_account_prefix" {
+  description = "The username prefix for the emergency access (break-glass) account (e.g., admin.test)"
   type        = string
 }
 

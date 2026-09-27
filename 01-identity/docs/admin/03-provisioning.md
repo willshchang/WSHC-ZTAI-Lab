@@ -1,10 +1,10 @@
 # TinyCo Entra ID — User & Group Provisioning Guide
 
 **Document Type:** Admin Documentation  
-**Author:** Will Chang, Sr. IT Operations Engineer  
-**Audience:** TinyCo IT Administrator  
-**Last Updated:** April 2026  
-**Repository:** https://github.com/willshchang/WSHC-Entra-IaC-Zero-Trust-Lab
+**Author:** Will Chang, Zero Trust AI Engineer  
+**Audience:** IT Administrator  
+**Last Updated:** September 2026  
+**Repository:** https://github.com/willshchang/WSHC-ZeroTrust-IaC-Lab  
 
 ---
 
@@ -159,7 +159,7 @@ terraform apply
 Type `yes` when prompted.
 
 **What happens automatically:**
-1. User account `alex.smith@TinyCoDDG.onmicrosoft.com` created in Entra
+1. User account `alex.smith@<tenant>.onmicrosoft.com` created in Entra
 2. `department = "Backend"` attribute written to the account
 3. ABAC engine picks up the attribute change within 5–15 minutes
 4. User added to `TinyCo-Backend` dynamic group automatically
@@ -177,7 +177,7 @@ Use this method only when immediate provisioning is required and
 1. **Entra admin centre** → **Users** → **New user** → 
    **Create new user**
 2. Fill in:
-   - **User principal name:** `firstname.lastname@TinyCoDDG.onmicrosoft.com`
+   - **User principal name:** `firstname.lastname@<tenant>.onmicrosoft.com`
    - **Display name:** `First Last`
    - **First name / Last name:** required for SSO attribute mapping
    - **Department:** must match the team name exactly (e.g. `Backend`)
@@ -431,3 +431,14 @@ Replace the current `setproduct` all-teams matrix with dedicated
 per-app RBAC files implementing least-privilege role assignments. 
 See [ARCHITECTURE.md](../ARCHITECTURE.md#per-app-rbac-design) 
 for the full production design.
+
+---
+
+## Official References
+
+| Topic | URL |
+|---|---|
+| Dynamic membership groups | https://learn.microsoft.com/en-us/entra/identity/users/groups-dynamic-membership |
+| Automated app provisioning (SCIM) | https://learn.microsoft.com/en-us/entra/identity/app-provisioning/user-provisioning |
+| How provisioning works | https://learn.microsoft.com/en-us/entra/identity/app-provisioning/how-provisioning-works |
+| Entra application gallery | https://learn.microsoft.com/en-us/entra/identity/enterprise-apps/overview-application-gallery |

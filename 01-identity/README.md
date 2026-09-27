@@ -1,18 +1,20 @@
-# WSHC — Entra ID Zero Trust IaC Lab
+# Layer 1: Identity (Microsoft Entra ID)
 
-**Author:** Will Chang, Sr. IT Operations Engineer  
-**GitHub:** https://github.com/willshchang/WSHC-ZeroTrust-IaC-Lab
+**Author:** Will Chang, Zero Trust AI Engineer  
+**Audience:** IT Administrator  
+**Last Updated:** September 2026  
+**Repository:** https://github.com/willshchang/WSHC-ZeroTrust-IaC-Lab  
 
 ---
 
 ## Overview
 
-A personal lab project demonstrating enterprise-grade Microsoft Entra ID 
+The identity layer of the WSHC ZTAI Lab: enterprise-grade Microsoft Entra ID 
 (formerly Azure Active Directory) identity infrastructure, built entirely 
 with Terraform IaC (Infrastructure as Code) and secured with a Zero Trust network architecture.
 
-This lab simulates a real-world identity migration for TinyCo — a 
-fictional 89-person startup — covering the full identity lifecycle from 
+It simulates a real-world identity migration for TinyCo — a 
+fictional 90-person company — covering the full identity lifecycle from 
 HR data ingestion to automated user provisioning, SSO across multiple 
 SaaS platforms, and network-level Zero Trust enforcement via Tailscale.
 
@@ -37,23 +39,23 @@ SaaS platforms, and network-level Zero Trust enforcement via Tailscale.
 
 ### Zero Trust — Two Layers
 
-**Layer 1 — Network (Tailscale)**  
-Internal resources (Azure VM, Mattermost) are unreachable from the 
-public internet. SSH port 22 is closed. Access requires an active 
-Tailscale VPN connection authenticated via Entra ID.
-
-**Layer 2 — Identity (Entra ID SSO)**  
+**Layer 1 — Identity (Entra ID SSO)**  
 Cloud SaaS applications (Tableau, Elastic) are protected by Entra ID 
 SSO via SAML or OIDC. MFA is enforced on every sign-in via 
 Conditional Access.
 
-![Security Architecture](./docs/tinyco_security_architecture.png)
+**Layer 2 — Network (Tailscale)**  
+Internal resources (Azure VM, Mattermost) are unreachable from the 
+public internet. SSH port 22 is closed. Access requires an active 
+Tailscale VPN connection authenticated via Entra ID.
+
+![Security Architecture](../docs/diagrams/tinyco_security_architecture.png)
 
 ### Identity Journey
 
 From HR data to app access — fully automated:
 
-![Identity Journey](./docs/tinyco_identity_journey.png)
+![Identity Journey](../docs/diagrams/tinyco_identity_journey.png)
 
 ---
 
@@ -75,7 +77,7 @@ From HR data to app access — fully automated:
 
 ## Repository Structure
 ```
-WSHC-Entra-IaC-Zero-Trust-Lab/
+01-identity/
 │
 ├── README.md
 ├── scripts/
@@ -161,3 +163,17 @@ searches, no accidental mass deprovisioning risk.
 - `terraform.tfvars` is gitignored — all secrets stay local
 - SSH port 22 is closed to the public internet — VM accessible via Tailscale only
 - All app access enforced via Entra ID group assignments and Conditional Access
+
+---
+
+## Official References
+
+| Topic | URL |
+|---|---|
+| NIST SP 800-207 Zero Trust Architecture | https://csrc.nist.gov/pubs/sp/800/207/final |
+| Dynamic membership groups | https://learn.microsoft.com/en-us/entra/identity/users/groups-dynamic-membership |
+| Role-assignable groups | https://learn.microsoft.com/en-us/entra/identity/role-based-access-control/groups-concept |
+| Conditional Access overview | https://learn.microsoft.com/en-us/entra/identity/conditional-access/overview |
+| Entra application gallery | https://learn.microsoft.com/en-us/entra/identity/enterprise-apps/overview-application-gallery |
+| Automated app provisioning (SCIM) | https://learn.microsoft.com/en-us/entra/identity/app-provisioning/user-provisioning |
+| Terraform azuread provider | https://registry.terraform.io/providers/hashicorp/azuread/latest/docs |

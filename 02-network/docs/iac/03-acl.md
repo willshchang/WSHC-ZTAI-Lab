@@ -1,11 +1,10 @@
 # Tailscale IaC — acl.tf
 
 **Document Type:** IaC Reference  
-**Author:** Will Chang, Customer Success Engineer  
-**Audience:** IT Administrator / Tailscale CSE Reference  
-**Last Updated:** April 2026  
+**Author:** Will Chang, Zero Trust AI Engineer  
+**Audience:** IT Administrator  
+**Last Updated:** September 2026  
 **Repository:** https://github.com/willshchang/WSHC-ZeroTrust-IaC-Lab  
-**Official Reference:** https://tailscale.com/docs/reference/syntax/policy-file
 
 ---
 

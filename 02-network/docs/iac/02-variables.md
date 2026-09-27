@@ -1,10 +1,10 @@
 # Tailscale IaC — variables.tf
 
 **Document Type:** IaC Reference  
-**Author:** Will Chang, Customer Success Engineer  
-**Audience:** IT Administrator / Tailscale CSE Reference  
-**Last Updated:** April 2026  
-**Repository:** https://github.com/willshchang/WSHC-ZeroTrust-IaC-Lab
+**Author:** Will Chang, Zero Trust AI Engineer  
+**Audience:** IT Administrator  
+**Last Updated:** September 2026  
+**Repository:** https://github.com/willshchang/WSHC-ZeroTrust-IaC-Lab  
 
 ---
 
@@ -19,7 +19,7 @@ Terraform configuration. Zero hardcoded values exist in any
 ## Zero Hardcode Design
 
 This codebase follows the same zero-hardcode principle as the 
-Entra IAM layer:
+identity layer:
 
 > No device IDs, email addresses, subnet CIDRs, or credentials 
 > exist in any `.tf` file. Swap `terraform.tfvars` and the 

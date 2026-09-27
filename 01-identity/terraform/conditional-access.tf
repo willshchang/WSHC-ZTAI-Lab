@@ -62,7 +62,7 @@ resource "azuread_conditional_access_policy" "block_legacy_auth" {
     users {
       included_users = ["All"]
 
-      # Ensures the grader won't get locked out if testing via legacy methods
+      # Break-glass account is excluded so an emergency admin can never be locked out
       excluded_groups = [azuread_group.security_exclusion.object_id]
     }
   }

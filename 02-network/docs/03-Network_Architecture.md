@@ -1,15 +1,14 @@
 # Tailscale Network Architecture
 
 **Document Type:** Network Architecture Reference  
-**Author:** Will Chang, Tailscale Customer Success Engineer  
-**Audience:** IT Administrator / Tailscale CSE Reference  
-**Last Updated:** April 2026  
+**Author:** Will Chang, Zero Trust AI Engineer  
+**Audience:** IT Administrator  
+**Last Updated:** September 2026  
 **Repository:** https://github.com/willshchang/WSHC-ZeroTrust-IaC-Lab  
-**Official Reference:** https://tailscale.com/docs
 
 ---
 
-![Zero Trust IaC Network Architecture](../wshc_zero_trust_network_architecture.png)
+![Zero Trust IaC Network Architecture](../../docs/diagrams/wshc_zero_trust_network_architecture.png)
 
 ## Overview
 
@@ -19,8 +18,8 @@ layer, site-to-site topology, ACL policy design, and how it
 mirrors the Entra ID identity model.
 
 For setup and troubleshooting procedures, see:
-- [01-Tailscale_Subnet_Router_Setup_and_Troubleshooting.md](./01-Tailscale_Subnet_Router_Setup_and_Troubleshooting.md)
-- [02-Tailscale_ACL_Tags_and_Access_Control.md](./02-Tailscale_ACL_Tags_and_Access_Control.md)
+- [01-Subnet_Router_Setup_and_Troubleshooting.md](./01-Subnet_Router_Setup_and_Troubleshooting.md)
+- [02-ACL_Tags_and_Access_Control.md](./02-ACL_Tags_and_Access_Control.md)
 
 ---
 
@@ -245,8 +244,8 @@ sudo tailscale set --advertise-routes=192.168.1.0/24
 sudo tailscale set --advertise-routes=8.8.8.0/24
 ```
 
-> **Interview tip:** When a customer says "my subnet router 
-> isn't working" — always confirm they are advertising a 
+> **Troubleshooting tip:** When a subnet router "isn't working", 
+> first confirm they are advertising a 
 > valid RFC 1918 range, not a public IP range or an 
 > overlapping range that conflicts with another subnet.
 
