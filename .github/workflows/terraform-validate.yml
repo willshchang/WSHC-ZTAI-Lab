@@ -1,7 +1,7 @@
 # ============================================================
 # TERRAFORM VALIDATION PIPELINE
 # ============================================================
-# Automatically validates Tailscale Terraform code on every
+# Automatically validates Terraform code for both layers on every
 # push and pull request.
 #
 # What this pipeline checks:
@@ -23,16 +23,16 @@ name: Terraform Validate
 on:
   push:
     paths:
-      - 'Tailscale/terraform/**'
-      - 'Entra IAM/terraform/**'
+      - '02-network/terraform/**'
+      - '01-identity/terraform/**'
   pull_request:
     paths:
-      - 'Tailscale/terraform/**'
-      - 'Entra IAM/terraform/**'
+      - '02-network/terraform/**'
+      - '01-identity/terraform/**'
 
 jobs:
   validate-tailscale:
-    name: Validate Tailscale Terraform
+    name: Validate Network Layer (Tailscale)
     runs-on: ubuntu-latest
 
     steps:
@@ -45,25 +45,25 @@ jobs:
           terraform_version: "~> 1.5"
 
       - name: Terraform Format Check
-        working-directory: Tailscale/terraform
+        working-directory: 02-network/terraform
         run: terraform fmt -check -recursive
         # Fails if any file is not properly formatted
         # Run `terraform fmt` locally to fix formatting issues
 
       - name: Terraform Init
-        working-directory: Tailscale/terraform
+        working-directory: 02-network/terraform
         run: terraform init -backend=false
         # -backend=false skips state backend init
         # Allows validation without real credentials
 
       - name: Terraform Validate
-        working-directory: Tailscale/terraform
+        working-directory: 02-network/terraform
         run: terraform validate
         # Checks syntax and internal consistency
         # Does not connect to Tailscale API
 
   validate-entra:
-    name: Validate Entra IAM Terraform
+    name: Validate Identity Layer (Entra ID)
     runs-on: ubuntu-latest
 
     steps:
@@ -76,13 +76,13 @@ jobs:
           terraform_version: "~> 1.5"
 
       - name: Terraform Format Check
-        working-directory: Entra IAM/terraform
+        working-directory: 01-identity/terraform
         run: terraform fmt -check -recursive
 
       #- name: Terraform Init
-      #  working-directory: Entra IAM/terraform
+      #  working-directory: 01-identity/terraform
       #  run: terraform init -backend=false
 
       #- name: Terraform Validate
-      #  working-directory: Entra IAM/terraform
+      #  working-directory: 01-identity/terraform
       #  run: terraform validate
