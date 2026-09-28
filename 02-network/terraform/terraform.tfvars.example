@@ -23,6 +23,9 @@ subnet_router_ha_DNSname      = "your-ha-appletv-DNSnamename"
 
 home_subnet_cidr = "192.168.1.0/24"
 
+# Approve both Apple TV routers as exit nodes (true/false)
+exit_node_enabled = true
+
 admin_email = "your-email@gmail.com"
 
 # Manager tag for Terraform OAuth client

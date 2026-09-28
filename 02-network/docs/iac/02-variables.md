@@ -61,6 +61,7 @@ public version control — no sensitive data ever touches GitHub.
 
 **Network:**
 - `home_subnet_cidr` — subnet advertised by Apple TV routers
+- `exit_node_enabled` — true/false switch approving both Apple TV routers as exit nodes (see [07-subnet-routes.md](./07-subnet-routes.md))
 
 **Identity:**
 - `admin_email` — Tailscale account email for ACL grants
