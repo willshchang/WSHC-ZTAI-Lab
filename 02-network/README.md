@@ -13,6 +13,8 @@ The network layer of the WSHC ZTAI Lab. Once a user has proven who
 they are through Layer 1 (Entra ID), this layer decides which machines
 they can actually reach, over which ports, and how.
 
+This layer controls **Reachability**: what can reach what.
+
 Built on Tailscale, a WireGuard-based mesh network, and managed
 entirely through Terraform. There is no traditional "inside" network:
 being connected to the tailnet grants nothing by itself. Every
@@ -160,4 +162,6 @@ terraform apply
 | Subnet routers | https://tailscale.com/docs/features/subnet-routers |
 | High availability | https://tailscale.com/docs/how-to/set-up-high-availability |
 | Tailscale SSH | https://tailscale.com/docs/features/tailscale-ssh |
+| Configuration audit logs | https://tailscale.com/docs/features/logging/audit-logging |
+| Network flow logs | https://tailscale.com/kb/1219/network-flow-logs |
 | Auth keys | https://tailscale.com/docs/features/access-control/auth-keys |

@@ -13,6 +13,9 @@ The identity layer of the WSHC ZTAI Lab: enterprise-grade Microsoft Entra ID
 (formerly Azure Active Directory) identity infrastructure, built entirely 
 with Terraform IaC (Infrastructure as Code) and secured with a Zero Trust network architecture.
 
+This layer controls **Accessibility**: who can access what. Every
+user, group, role and app assignment is decided here.
+
 It simulates a real-world identity migration for TinyCo — a 
 fictional 90-person company — covering the full identity lifecycle from 
 HR data ingestion to automated user provisioning, SSO across multiple 

@@ -21,8 +21,8 @@ architecture, built entirely as code:
 HR CSV export
   → ETL pipeline (sanitise and stage the data)
     → Terraform
-      → Entra ID: users, groups, roles, MFA, SSO, SCIM      (Layer 1: Identity)
-        → Tailscale: ACL policy, tags, SSH, subnet routing  (Layer 2: Network)
+      → Entra ID: users, groups, roles, MFA, SSO, SCIM      (Layer 1: Identity, Accessibility)
+        → Tailscale: ACL policy, tags, SSH, subnet routing  (Layer 2: Network, Reachability)
 ```
 
 Every user, group, role, app assignment and network rule comes from
@@ -34,8 +34,8 @@ code. Nothing is clicked into existence by hand.
 
 | Layer | Status |
 |---|---|
-| **Layer 1: Identity (Entra ID)** | Deployed and validated on a live Microsoft Entra ID tenant during the Microsoft 365 E5 trial (late spring 2026). The trial has since ended. All Terraform code and deployment documentation are retained. |
-| **Layer 2: Network (Tailscale)** | Live. Tailnet, Azure VM and both subnet routers are running and managed by Terraform. |
+| **Layer 1: Identity (Accessibility)** | Deployed and validated on a live Microsoft Entra ID tenant during the Microsoft 365 E5 trial (late spring 2026). The trial has since ended. All Terraform code and deployment documentation are retained. |
+| **Layer 2: Network (Reachability)** | Live. Tailnet, Azure VM and both subnet routers are running and managed by Terraform. |
 
 > **Note:** Layer 1 was originally deployed to the tenant
 > `TinyCoDDG.onmicrosoft.com`. The docs use `<tenant>.onmicrosoft.com`
@@ -50,17 +50,21 @@ network. Every request has to prove who is asking and whether they are
 allowed, every time.
 
 This lab enforces that with two independent layers. A user has to pass
-**both** before reaching anything.
+**both** before reaching anything. Each layer is named by the property it
+controls:
+
+- **Accessibility:** who can access what (identity, roles, apps)
+- **Reachability:** what can reach what (machines, networks, ports)
 
 | Layer | Question it answers | Tool |
 |---|---|---|
-| **1. Identity** | Who are you, and what are you allowed to use? | Microsoft Entra ID |
-| **2. Network** | Which machines can you actually reach, and how? | Tailscale |
+| **1. Identity: Accessibility** | Who are you, and what are you allowed to access? | Microsoft Entra ID |
+| **2. Network: Reachability** | Which machines can you actually reach, and how? | Tailscale |
 | **Cross-cutting: IaC and Automation** | How is all of this built, changed and checked? | Terraform, Bash, GitHub Actions |
 
 ![Zero Trust Network Architecture](./docs/diagrams/wshc_zero_trust_network_architecture.png)
 
-### Layer 1: Identity (Entra ID)
+### Layer 1: Identity, Accessibility (Entra ID)
 
 | Capability | What it does in plain English |
 |---|---|
@@ -72,7 +76,7 @@ This lab enforces that with two independent layers. A user has to pass
 | **SCIM** | Tableau accounts are created and removed automatically from Entra. |
 | **Privileged Access (foundations)** | Admin roles only through dedicated role-assignable groups. Break-glass account with a group-based Conditional Access exclusion. |
 
-### Layer 2: Network (Tailscale)
+### Layer 2: Network, Reachability (Tailscale)
 
 | Capability | What it does in plain English |
 |---|---|
@@ -133,13 +137,13 @@ WSHC-ZeroTrust-IaC-Lab/
 ├── docs/
 │   └── diagrams/            ← architecture diagrams for both layers
 │
-├── 01-identity/             ← Layer 1: Entra ID
+├── 01-identity/             ← Layer 1: Identity, Accessibility (Entra ID)
 │   ├── README.md
 │   ├── terraform/           ← users, groups, RBAC, Conditional Access, SSO apps
 │   ├── scripts/             ← ETL pipeline, gallery app lookup
 │   └── docs/                ← architecture, admin and end-user guides
 │
-├── 02-network/              ← Layer 2: Tailscale
+├── 02-network/              ← Layer 2: Network, Reachability (Tailscale)
 │   ├── README.md
 │   ├── terraform/           ← ACL, tags, DNS, settings, subnet routes, auth keys
 │   └── docs/                ← subnet routing, ACL, network architecture, Tailscale SSH
@@ -213,8 +217,8 @@ Each layer has its own full setup guide:
 
 | Layer | Start here |
 |---|---|
-| Layer 1: Identity | [01-identity/README.md](./01-identity/README.md) |
-| Layer 2: Network | [02-network/README.md](./02-network/README.md) |
+| Layer 1: Identity, Accessibility | [01-identity/README.md](./01-identity/README.md) |
+| Layer 2: Network, Reachability | [02-network/README.md](./02-network/README.md) |
 
 Both layers deploy the same way once their prerequisites and
 `terraform.tfvars` are in place:
@@ -254,6 +258,7 @@ terraform apply
 | **Terraform remote state** | Shared, locked state for team use instead of a local state file |
 | **Automated access reviews** | Scheduled review of who still needs what |
 | **`03-agents/`** | Extend the same identity and network controls to AI agents: scoped identities per agent, least-privilege tool access, network-level containment |
+| **Agent observability** | Follow every agent run end to end and live: what triggered it, what it decided, which identity it used, what it touched and the outcome. One OpenTelemetry trace per run, identity on every span, secrets redacted before storage. Today the lab has visibility only (Tailscale configuration audit logs); network flow logs require a Tailscale Premium or Enterprise plan. |
 
 ---
 
@@ -291,3 +296,6 @@ terraform apply
 | Tailscale Terraform provider | https://registry.terraform.io/providers/tailscale/tailscale/latest/docs |
 | Tailscale ACL policy syntax | https://tailscale.com/docs/reference/syntax/policy-file |
 | Tailscale SSH | https://tailscale.com/docs/features/tailscale-ssh |
+| Tailscale configuration audit logs | https://tailscale.com/docs/features/logging/audit-logging |
+| Tailscale network flow logs | https://tailscale.com/kb/1219/network-flow-logs |
+| OpenTelemetry GenAI semantic conventions | https://opentelemetry.io/docs/specs/semconv/registry/attributes/gen-ai/ |
