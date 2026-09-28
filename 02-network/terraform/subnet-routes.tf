@@ -46,6 +46,33 @@
 # ============================================================
 
 # ============================================================
+# ROUTE SETS
+# ============================================================
+# WHY locals: both routers approve the same route set, so it
+# is defined once here instead of twice below.
+#
+# Exit node routes are Tailscale's convention for "all
+# internet traffic": 0.0.0.0/0 (IPv4) and ::/0 (IPv6).
+# They are added only when var.exit_node_enabled is true.
+#
+# Exit node traffic is also gated by the ACL policy:
+# acl.tf grants admin_email access to autogroup:internet.
+# Approving the route without that grant does nothing.
+#
+# Production expansion:
+# Use one switch per router if some sites should never act
+# as exit nodes, e.g. var.exit_node_enabled_primary.
+# ============================================================
+locals {
+  exit_node_routes = ["0.0.0.0/0", "::/0"]
+
+  subnet_router_routes = concat(
+    [var.home_subnet_cidr],
+    var.exit_node_enabled ? local.exit_node_routes : []
+  )
+}
+
+# ============================================================
 # PRIMARY SUBNET ROUTER — Living Room Apple TV
 # ============================================================
 # Approves the home LAN subnet route advertised by the
@@ -68,10 +95,11 @@
 resource "tailscale_device_subnet_routes" "primary" {
   device_id = data.tailscale_device.subnet_router_primary.id
 
-  # Subnets this device is approved to route
+  # Subnets this device is approved to route, plus exit node
+  # routes when var.exit_node_enabled is true
   # Must match exactly what the device advertises
   # Verify with: tailscale status --json | grep PrimaryRoutes
-  routes = [var.home_subnet_cidr]
+  routes = local.subnet_router_routes
 
   depends_on = [tailscale_acl.policy]
 }
@@ -100,9 +128,10 @@ resource "tailscale_device_subnet_routes" "primary" {
 resource "tailscale_device_subnet_routes" "ha" {
   device_id = data.tailscale_device.subnet_router_ha.id
 
-  # Same subnet as primary — enables HA failover
+  # Same route set as primary — enables HA failover for the
+  # subnet and a second exit node when the switch is on
   # Tailscale selects one as PrimaryRoutes, other as standby
-  routes = [var.home_subnet_cidr]
+  routes = local.subnet_router_routes
 
   depends_on = [tailscale_acl.policy]
 }

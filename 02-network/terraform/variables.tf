@@ -77,6 +77,29 @@ variable "home_subnet_cidr" {
 }
 
 # ============================================================
+# EXIT NODE SWITCH
+# ============================================================
+# One on/off switch for exit node approval on both Apple TV
+# routers. WHY a switch: exit node approval lives in the same
+# Terraform resource as subnet routes. If the code does not
+# list the exit node routes, terraform apply removes any
+# exit node that was approved by hand in the admin console.
+#
+# true  = Apple TVs approved as exit nodes (all internet
+#         traffic can be routed through them)
+# false = Apple TVs route the home LAN subnet only
+#
+# The device must still advertise itself as an exit node
+# (Tailscale app on tvOS). This switch only approves it.
+# ============================================================
+
+variable "exit_node_enabled" {
+  description = "Approve the Apple TV subnet routers as exit nodes"
+  type        = bool
+  default     = false
+}
+
+# ============================================================
 # IDENTITY
 # ============================================================
 
