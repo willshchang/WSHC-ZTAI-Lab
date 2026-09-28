@@ -27,23 +27,26 @@ override.tf.json
 terraform.rc
 
 # ============================================================
-# ENTRA IAM — sensitive directories
+# SENSITIVE LOCAL DATA — never committed
 # ============================================================
-Entra IAM/data/
-Entra IAM/incoming/
-Entra IAM/SaaS data/
-Entra IAM/SSO certs and keys/
-Entra IAM/docs/SUBMISSION-NOTES.md
-
+# Written as **/ patterns so they match in any folder.
+# WHY: a folder rename (e.g. "Entra IAM" to "01-identity")
+# can never silently expose HR data, certs or credentials.
 # ============================================================
-# TAILSCALE — sensitive directories
-# ============================================================
-Tailscale/terraform/terraform.tfvars
-
-# ============================================================
-# ROOT — sensitive files
-# ============================================================
+**/data/
+**/incoming/
+**/SaaS data/
+**/SSO certs and keys/
+**/SUBMISSION-NOTES.md
+**/terraform.tfvars
 Lab Quick Reference.md
+
+# ============================================================
+# PRIVATE NOTES — kept locally, never published
+# ============================================================
+# Personal study notes, presentation scripts and drafts.
+# ============================================================
+_private/
 
 # ============================================================
 # SSL certificates and private keys — anywhere in repo
