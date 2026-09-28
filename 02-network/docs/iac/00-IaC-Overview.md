@@ -43,6 +43,49 @@ not device installation or enrollment. This is the IaC boundary.
 
 ---
 
+## Code Is the Source of Truth
+
+Once Terraform manages a setting, the code decides what that
+setting should be, not the admin console.
+
+**The rule:** change the code or `terraform.tfvars`, then run
+`terraform plan` and `terraform apply`. Do not change
+Terraform-managed settings by clicking in the admin console.
+
+**Why it matters:** anything changed by hand in the console
+is **drift**, a gap between what the code says and what is
+actually running. `terraform plan` detects it, and
+`terraform apply` puts it back to match the code. A manual
+fix that is never written into code gets silently undone on
+the next apply.
+
+**Verified in this lab:**
+
+| What happened | What Terraform did |
+|---|---|
+| A subnet route was turned off in the console during an HA failover test and never turned back on | `terraform plan` flagged it; `apply` restored the route |
+| Both Apple TVs were approved as exit nodes by hand in the console | `terraform plan` wanted to remove them. Fixed by adding the `exit_node_enabled` switch so the code matches the intended state |
+
+**Healthy state check:**
+```bash
+cd 02-network/terraform
+terraform plan
+# Expected: No changes. Your infrastructure matches the configuration.
+```
+
+Any other result means something changed outside the code.
+Read the plan before applying: either the change was
+unintended (apply to revert it) or it was intended (write it
+into the code first, then apply).
+
+> **Manual steps are different:** installing Tailscale,
+> enrolling devices, advertising routes and choosing an exit
+> node on a client are device-side actions outside the IaC
+> boundary (see the table above). Terraform does not track
+> them, so they never show up as drift.
+
+---
+
 ## Tools Matrix — Full Stack
 
 | Layer | Tool | Purpose |
