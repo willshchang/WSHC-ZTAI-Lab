@@ -127,6 +127,22 @@ exit_node_enabled = false   # home LAN subnet only
 > Those devices carry no tags and are not in Terraform, so
 > their exit node approval stays a manual admin console step.
 
+### Who owns which step
+
+Exit nodes involve three separate actions, and only one of
+them belongs to Terraform:
+
+| Where it happens | What it is | Does Terraform care? |
+|---|---|---|
+| **Client app** (phone, laptop): picking an exit node | **Using** an exit node. A personal choice on that device. | No. Nothing in the tailnet config changes, so there is no drift. |
+| **Apple TV Tailscale app**: "Run as exit node" | **Advertising.** The device offers itself as an exit node. | No. Manual device step, outside the IaC boundary. |
+| **Admin console**: approving or removing the exit node | **Approval.** | **Yes.** Terraform owns this. The next `terraform plan` shows a console change as drift, and `terraform apply` reverts it to match `exit_node_enabled`. |
+
+> **Rule:** To turn exit nodes on or off, change
+> `exit_node_enabled` in `terraform.tfvars` and run
+> `terraform apply`. Never approve or remove them in the admin
+> console. See [Code Is the Source of Truth](./00-IaC-Overview.md#code-is-the-source-of-truth).
+
 ---
 
 ## Production Expansion
