@@ -3,7 +3,7 @@
 **Author:** Will Chang, Zero Trust AI Engineer  
 **Audience:** IT Administrator  
 **Last Updated:** September 2026  
-**Repository:** https://github.com/willshchang/WSHC-ZeroTrust-IaC-Lab  
+**Repository:** https://github.com/willshchang/WSHC-ZTAI-Lab  
 
 ---
 
