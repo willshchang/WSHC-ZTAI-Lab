@@ -5,7 +5,7 @@
 **Document Type:** Repository Overview  
 **Author:** Will Chang, Zero Trust AI Engineer  
 **Last Updated:** September 2026  
-**Repository:** https://github.com/willshchang/WSHC-ZeroTrust-IaC-Lab  
+**Repository:** https://github.com/willshchang/WSHC-ZTAI-Lab  
 
 ---
 
@@ -131,7 +131,7 @@ Mapped to the tenets in NIST SP 800-207:
 ## Repository Structure
 
 ```
-WSHC-ZeroTrust-IaC-Lab/
+WSHC-ZTAI-Lab/
 │
 ├── README.md                ← you are here
 ├── docs/
