@@ -130,6 +130,12 @@ VM plus workload identity federation, so no static key exists), OpenTelemetry
 traces for live end-to-end observability, and a fast decision model (such as
 Jev) for routing and guardrail checks.
 
+**Spend watcher (designed, not built):** tracks API spend per agent key. The
+cost report needs an organization-wide admin key, so the design splits the
+work: plain code holds the admin key and pulls the numbers, and only the
+numbers reach the model or Slack. The model never sees the key. It's on hold
+because the admin API isn't available on individual accounts.
+
 ---
 
 ## Official References
@@ -140,5 +146,6 @@ Jev) for routing and guardrail checks.
 | Claude models | https://platform.claude.com/docs/en/models/overview |
 | Node.js TypeScript support | https://nodejs.org/api/typescript.html |
 | Slack incoming webhooks | https://api.slack.com/messaging/webhooks |
+| Claude Usage and Cost API | https://platform.claude.com/docs/en/manage-claude/usage-cost-api |
 | OpenTelemetry GenAI semantic conventions | https://opentelemetry.io/docs/specs/semconv/registry/attributes/gen-ai/ |
 | RFC 2606 reserved domains (`.example`) | https://www.rfc-editor.org/rfc/rfc2606 |
