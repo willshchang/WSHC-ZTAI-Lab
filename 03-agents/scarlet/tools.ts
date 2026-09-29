@@ -1,14 +1,17 @@
 // ============================================================
 // SCARLET'S TOOLS
 // ============================================================
-// Scarlet gets exactly two tools:
+// Scarlet gets exactly three tools:
 //   delegate        hand a task to one allowed agent
 //   report_friction say "I can't route this" instead of guessing
+//   ask_human       ask Will one clarifying question
+// None of them touch data. She routes; the agents do the work.
 // ============================================================
 
+import { makeAskHumanTool } from "../core/ask.ts";
 import { makeFrictionTool } from "../core/friction.ts";
 import type { AgentTool } from "../core/types.ts";
-import { registry } from "./registry.ts";
+import type { AgentEntry } from "./registry.ts";
 import { scarletPolicy } from "./policy.ts";
 
 const log = (msg: string) => console.log(msg);
@@ -23,7 +26,8 @@ const log = (msg: string) => console.log(msg);
 // ------------------------------------------------------------
 let handoffInProgress = false;
 
-export function makeDelegateTool(opts: { mock: boolean }): AgentTool {
+export function makeDelegateTool(registry: AgentEntry[], opts: { mock: boolean }): AgentTool {
+  // Knowledge (registry) AND permission (policy) must both agree
   const allowed = registry.filter((a) => scarletPolicy.canDelegateTo?.includes(a.id));
 
   return {
@@ -61,6 +65,19 @@ export function makeDelegateTool(opts: { mock: boolean }): AgentTool {
         ctx.trace.record("delegation_denied", { toAgent: agentId, task });
         log(`🚫 Denied: "${agentId}" is not an agent ${ctx.policy.id} may hand work to`);
         throw new Error(`Denied by policy: ${ctx.policy.id} may not delegate to "${agentId}".`);
+      }
+      // ------------------------------------------------------
+      // THE CONTRACT: the task must match the agent's exact format.
+      // Anything else is rejected before the agent starts, so
+      // injected or garbled text can't travel into a handoff.
+      // ------------------------------------------------------
+      if (!target.taskPattern.test(task)) {
+        ctx.trace.record("delegation_denied", { toAgent: agentId, task, reason: "task_format" });
+        log(`🚫 Denied: task doesn't match ${target.name}'s contract`);
+        throw new Error(
+          `Denied: the task must match the exact format "${target.taskFormat}". ` +
+            `Fix the task, or report friction if a detail is missing.`,
+        );
       }
       if (handoffInProgress) {
         ctx.trace.record("delegation_denied", { toAgent: agentId, reason: "nested handoff" });
@@ -109,6 +126,6 @@ export function makeDelegateTool(opts: { mock: boolean }): AgentTool {
   };
 }
 
-export function scarletTools(opts: { mock: boolean }): AgentTool[] {
-  return [makeDelegateTool(opts), makeFrictionTool()];
+export function scarletTools(registry: AgentEntry[], opts: { mock: boolean }): AgentTool[] {
+  return [makeDelegateTool(registry, opts), makeFrictionTool(), makeAskHumanTool()];
 }

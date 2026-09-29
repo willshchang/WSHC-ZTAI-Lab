@@ -6,12 +6,48 @@
 // evidence turns every report into a ready-made eval case, the
 // same pattern Expo uses to collect feedback from coding agents.
 //
+// Two ways a report gets filed:
+//   by the agent   through the report_friction tool
+//   by the system  when an agent fails silently (ends without
+//                  acting, or hits its step limit). The alert must
+//                  never depend on the model choosing to report.
+//
 // Risk tier: internal-write. It only posts to our own feedback
 // channel, so it runs without approval, but it is always traced.
 // ============================================================
 
 import { postToSlack } from "./slack.ts";
-import type { AgentTool } from "./types.ts";
+import type { AgentPolicy, AgentTool } from "./types.ts";
+
+export interface FrictionFields {
+  category: string;
+  task: string;
+  expected: string;
+  actual: string;
+  wrong_approach?: string;
+  evidence: string;
+}
+
+export async function fileFrictionReport(
+  fields: FrictionFields,
+  policy: AgentPolicy,
+  runId: string,
+  filedBy: "agent" | "system" = "agent",
+) {
+  const text =
+    `:warning: *Agent friction report* (${fields.category})` +
+    (filedBy === "system" ? " :rotating_light: *filed by the system*" : "") +
+    `\n*Agent:* ${policy.name} (\`${policy.id}\`)\n` +
+    `*Task:* ${fields.task}\n` +
+    `*Expected:* ${fields.expected}\n` +
+    `*Actual:* ${fields.actual}\n` +
+    (fields.wrong_approach ? `*Wrong approach avoided:* ${fields.wrong_approach}\n` : "") +
+    `*Evidence:* ${fields.evidence}\n` +
+    `*Trace:* \`${runId}\``;
+
+  const result = await postToSlack(process.env.SLACK_WEBHOOK_AGENT_FEEDBACK, "#agent-feedback", text);
+  return { reported: true, filedBy, ...result };
+}
 
 export function makeFrictionTool(): AgentTool {
   return {
@@ -39,23 +75,7 @@ export function makeFrictionTool(): AgentTool {
       required: ["category", "task", "expected", "actual", "evidence"],
     },
     risk: "internal-write",
-    run: async (input, ctx) => {
-      const text =
-        `:warning: *Agent friction report* (${input.category})\n` +
-        `*Agent:* ${ctx.policy.name} (\`${ctx.policy.id}\`)\n` +
-        `*Task:* ${input.task}\n` +
-        `*Expected:* ${input.expected}\n` +
-        `*Actual:* ${input.actual}\n` +
-        (input.wrong_approach ? `*Wrong approach avoided:* ${input.wrong_approach}\n` : "") +
-        `*Evidence:* ${input.evidence}\n` +
-        `*Trace:* \`${ctx.trace.runId}\``;
-
-      const result = await postToSlack(
-        process.env.SLACK_WEBHOOK_AGENT_FEEDBACK,
-        "#agent-feedback",
-        text,
-      );
-      return { reported: true, ...result };
-    },
+    run: async (input, ctx) =>
+      fileFrictionReport(input as unknown as FrictionFields, ctx.policy, ctx.trace.runId, "agent"),
   };
 }

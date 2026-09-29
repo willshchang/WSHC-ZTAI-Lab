@@ -1,0 +1,24 @@
+{
+  "_about": "Scarlet's agent directory: what each agent handles and the exact task it accepts. This is KNOWLEDGE, not permission: who Scarlet may hand work to is set only in her policy (scarlet/policy.ts). Changes go through a reviewed PR.",
+  "version": 1,
+  "agents": [
+    {
+      "id": "agent-gtm-signal-router",
+      "name": "GTM Signal Router",
+      "handles": "New product signups that need routing to sales, nurture or self-serve.",
+      "taskFormat": "Route this new signup. signup_id: <signup_id>",
+      "taskPattern": "^Route this new signup\\. signup_id: [a-z0-9]+(-[a-z0-9]+)*$",
+      "idFormat": "Signup ids are lowercase words joined by hyphens, like harbor-health or quickship-labs. A request that names one is complete.",
+      "examples": [
+        {
+          "request": "route the harbor-health signup",
+          "action": "delegate with task: Route this new signup. signup_id: harbor-health"
+        },
+        {
+          "request": "route the new signup",
+          "action": "signup_id is missing: report_friction (missing_data), then ask_human which signup"
+        }
+      ]
+    }
+  ]
+}

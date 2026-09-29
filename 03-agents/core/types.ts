@@ -37,6 +37,9 @@ export interface AgentPolicy {
   maxSteps: number;       // hard stop so a confused agent can't loop forever
   apiKeyEnv: string;      // the .env variable holding THIS agent's own API key
   canDelegateTo?: string[]; // coordinators only: agent ids it may hand work to
+  // NO SILENT FAILURE: at least one of these tools must succeed before
+  // the run may end. Otherwise: one reminder, then a system-filed alert.
+  requiredActions?: string[];
 }
 
 // ------------------------------------------------------------

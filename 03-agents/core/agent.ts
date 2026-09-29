@@ -10,6 +10,7 @@
 // ============================================================
 
 import { requestApproval } from "./approval.ts";
+import { fileFrictionReport } from "./friction.ts";
 import { Trace } from "./trace.ts";
 import type {
   AgentPolicy,
@@ -35,7 +36,7 @@ export interface RunResult {
   traceFile: string;
   finalText: string;
   steps: number;
-  outcome: "completed" | "max_steps_reached";
+  outcome: "completed" | "no_action" | "max_steps_reached";
 }
 
 const log = (msg: string) => console.log(msg);
@@ -85,6 +86,17 @@ export async function runAgent(opts: RunOptions): Promise<RunResult> {
 
   const messages: Message[] = [{ role: "user", content: task }];
   let finalText = "";
+  const succeeded = new Set<string>(); // tools that ran without error
+  let reminded = false;
+
+  const result = (steps: number, outcome: RunResult["outcome"]): RunResult => ({
+    runId: trace.runId,
+    requestId: trace.requestId,
+    traceFile: trace.file,
+    finalText,
+    steps,
+    outcome,
+  });
 
   for (let step = 1; step <= policy.maxSteps; step++) {
     const turn = await model.next({ system, messages, tools: offered });
@@ -101,39 +113,81 @@ export async function runAgent(opts: RunOptions): Promise<RunResult> {
         .map((b) => (b.type === "text" ? b.text : ""))
         .join("\n")
         .trim();
+
+      // ------------------------------------------------------
+      // NO SILENT FAILURE: an agent with required actions may not
+      // just talk and stop. One reminder, then the system alerts.
+      // ------------------------------------------------------
+      const required = policy.requiredActions ?? [];
+      const acted = required.length === 0 || required.some((name) => succeeded.has(name));
+      if (!acted && !reminded) {
+        reminded = true;
+        const reminder =
+          `You ended without acting. No one can reply to plain text here. ` +
+          `Call one of: ${required.join(", ")}. If something is missing, report friction.`;
+        trace.record("reminder", { reason: "ended_without_required_action", required });
+        log(`⚠ ${policy.name} ended without acting. Reminding once.`);
+        messages.push({ role: "user", content: reminder });
+        continue;
+      }
+      if (!acted) {
+        await raiseSilentFailure(policy, trace, task, "no_action",
+          `Ended twice without calling any of: ${required.join(", ")}`, finalText);
+        return result(step, "no_action");
+      }
+
       trace.record("run_end", { outcome: "completed", steps: step });
       log(`\n✅ ${policy.name} done in ${step} step(s). Trace: ${trace.file}\n`);
-      return {
-        runId: trace.runId,
-        requestId: trace.requestId,
-        traceFile: trace.file,
-        finalText,
-        steps: step,
-        outcome: "completed",
-      };
+      return result(step, "completed");
     }
 
     const results: ToolResultBlock[] = [];
     for (const call of toolCalls) {
       if (call.type !== "tool_use") continue;
-      results.push(await handleToolCall(call, byName, policy, trace));
+      const r = await handleToolCall(call, byName, policy, trace);
+      if (!r.is_error) succeeded.add(call.name);
+      results.push(r);
     }
     messages.push({ role: "user", content: results });
   }
 
   // ----------------------------------------------------------
-  // STEP LIMIT: a confused agent stops instead of looping forever
+  // STEP LIMIT: a confused agent stops instead of looping forever,
+  // and the stop is reported, never silent
   // ----------------------------------------------------------
-  trace.record("run_end", { outcome: "max_steps_reached", steps: policy.maxSteps });
-  log(`\n⛔ ${policy.name} stopped: reached the ${policy.maxSteps}-step limit. Trace: ${trace.file}\n`);
-  return {
-    runId: trace.runId,
-    requestId: trace.requestId,
-    traceFile: trace.file,
-    finalText,
-    steps: policy.maxSteps,
-    outcome: "max_steps_reached",
-  };
+  await raiseSilentFailure(policy, trace, task, "max_steps_reached",
+    `Reached the ${policy.maxSteps}-step limit before finishing`, finalText);
+  return result(policy.maxSteps, "max_steps_reached");
+}
+
+// ----------------------------------------------------------
+// SYSTEM ALERT: filed by the engine, not the model, so the alert
+// never depends on the model choosing to report its own failure
+// ----------------------------------------------------------
+async function raiseSilentFailure(
+  policy: AgentPolicy,
+  trace: Trace,
+  task: string,
+  outcome: "no_action" | "max_steps_reached",
+  actual: string,
+  lastText: string,
+): Promise<void> {
+  log(`\n⚠ ${policy.name}: ${actual}. Filing a system alert.`);
+  const report = await fileFrictionReport(
+    {
+      category: "tool_error",
+      task,
+      expected: "The agent finishes by acting (a handoff, a report or a completed job)",
+      actual,
+      evidence: lastText ? `Last message: "${lastText.slice(0, 300)}"` : "No final message",
+    },
+    policy,
+    trace.runId,
+    "system",
+  );
+  trace.record("system_alert", { outcome, actual, ...report });
+  trace.record("run_end", { outcome });
+  log(`⛔ ${policy.name} ended with outcome "${outcome}". Trace: ${trace.file}\n`);
 }
 
 async function handleToolCall(

@@ -24,6 +24,7 @@ Most agent demos give the model one admin key and hope. Here every agent gets:
 | **Default deny** | No human at the keyboard means the answer is no |
 | **A trace** | Every step (what it saw, decided and did) written to a JSONL file |
 | **A way to say "I'm stuck"** | `report_friction` files an eval-shaped report instead of guessing |
+| **No silent failure** | An agent that ends without acting, or hits its step limit, triggers an alert filed by the system itself |
 
 ---
 
@@ -32,7 +33,7 @@ Most agent demos give the model one admin key and hope. Here every agent gets:
 | Agent | Job | Status |
 |---|---|---|
 | **GTM Signal Router** | Score a new signup from product signals and route it to sales, nurture or self-serve | Built |
-| **Scarlet** (coordinator) | Read a request and hand it to the one agent whose job it is. Holds no data tools | Built |
+| **Scarlet** (main agent, coordinator) | Read a request and hand it to the one agent whose job it is. Asks Will when a detail is missing. Holds no data tools | Built |
 | JML Agent | Joiner, mover and leaver changes on the identity layer, with human approval for leavers | Planned |
 
 ---
@@ -93,8 +94,8 @@ number.
 
 ## Scarlet (Coordinator)
 
-Scarlet knows the map and routes each request to the one agent whose job it is.
-She holds no data tools of her own. **A coordinator routes, it never holds:** if
+Scarlet is the main agent Will works alongside. She knows the map and routes
+each request to the one agent whose job it is. She holds no data tools of her own. **A coordinator routes, it never holds:** if
 she held the other agents' tools, she would be the god-mode agent by the back door.
 
 **Tools and risk tiers:**
@@ -103,6 +104,7 @@ she held the other agents' tools, she would be the god-mode agent by the back do
 |---|---|---|
 | `delegate` | internal-write | Hands a task to one agent on her allowlist |
 | `report_friction` | internal-write | Reports a request she can't route safely, instead of guessing |
+| `ask_human` | read | Asks Will one clarifying question in the terminal |
 
 **Coordinator safety rules:**
 
@@ -115,6 +117,11 @@ she held the other agents' tools, she would be the god-mode agent by the back do
 | **Handoff results are data** | Another agent's result is never treated as instructions |
 | **No loops** | Handoff depth is 1: agents can't call Scarlet or each other. Plus a 5-step limit |
 | **Default deny** | Unknown requests and missing details are reported, never guessed |
+| **The handoff contract** | A task must match the agent's exact format (`agents.json`). Injected or garbled text is rejected before the agent starts |
+| **Knowledge is not permission** | `agents.json` describes the agents. Who she may hand work to is set only in her policy, in code |
+| **Fails closed** | A malformed `agents.json`, or one naming an agent with no runner, stops Scarlet from starting |
+| **Human in the loop, both ways** | With Will at the keyboard she can ask; with no one there the question is denied and she reports the gap. Max 3 questions; answers never change her permissions |
+| **No silent failure** | If she ends by only talking, she gets one reminder. Then the system files the alert, marks the run `no_action`, and shows a warning |
 | **Joined traces** | One request ID runs through Scarlet's trace and the agent's trace. The agent's trace also records which run handed it the work (the same parent/child idea as OpenTelemetry spans) |
 
 **Demo scenarios:**
@@ -123,8 +130,14 @@ she held the other agents' tools, she would be the god-mode agent by the back do
 |---|---|
 | `"route the harbor-health signup"` | Handoff to the GTM agent, which still waits for a human before posting |
 | `"offboard jane from the directory"` | A fooled model reaches for an agent outside her policy (`agent-jml`), and the runtime blocks it |
-| `"route the new signup"` | No signup id: reported, not guessed |
+| `"route the new signup"` | No signup id: she reports the gap, then asks Will. With no one at the keyboard the question is denied |
 | `"write me a poem about tacos"` | No agent owns this job: reported, not guessed |
+| `"hello scarlet"` | A model that only chats and never acts: reminder, then a system alert |
+
+**Where her knowledge lives:** `scarlet/agents.json`, a small definition file
+reviewed in git. It was chosen over `.env` (for secrets, never reviewed), a
+database (overkill for a few stable entries) and a wiki (the future home for
+knowledge that grows over time).
 
 **On hallucination:** no design can promise a model is never wrong. This one
 limits the damage: Scarlet can only choose real agents, her answers must quote
@@ -154,6 +167,7 @@ npm run scarlet:mock -- "route the harbor-health signup"
 npm run scarlet -- "route the harbor-health signup"
 
 npm run gtm -- --list      # show all signup ids
+npm run test:contract      # handoff contract test
 npm run typecheck          # type-check everything
 ```
 

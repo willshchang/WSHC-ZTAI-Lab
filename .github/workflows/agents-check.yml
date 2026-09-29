@@ -102,6 +102,24 @@ jobs:
             echo "$out" | grep -q "report_friction" || { echo "FAIL: no friction report for: $req"; exit 1; }
           done
 
+      - name: "Scarlet: a question with no one at the keyboard is denied, and the gap is reported"
+        run: |
+          out=$(npm run -s scarlet:mock -- "route the new signup" < /dev/null)
+          echo "$out"
+          echo "$out" | grep -q "ask_human" || { echo "FAIL: she didn't ask"; exit 1; }
+          echo "$out" | grep -q "question is DENIED by default" || { echo "FAIL: question not denied without a human"; exit 1; }
+
+      - name: "No silent failure: an agent that only talks triggers a system alert"
+        run: |
+          out=$(npm run -s scarlet:mock -- "hello scarlet" < /dev/null)
+          echo "$out"
+          echo "$out" | grep -q "Reminding once" || { echo "FAIL: no reminder"; exit 1; }
+          echo "$out" | grep -q "filed by the system" || { echo "FAIL: no system alert filed"; exit 1; }
+          echo "$out" | grep -q 'outcome "no_action"' || { echo "FAIL: run not marked no_action"; exit 1; }
+
+      - name: "Handoff contract: malformed or injected tasks are rejected"
+        run: npm run -s test:contract < /dev/null
+
       - name: "Every agent refuses to run without its own API key"
         run: |
           out=$(npm run -s scarlet -- "route the harbor-health signup" < /dev/null 2>&1 || true)
