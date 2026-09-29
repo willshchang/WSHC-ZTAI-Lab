@@ -7,12 +7,8 @@
 //   npm run gtm -- --list                          (show signup ids)
 // ============================================================
 
-import { runAgent } from "../core/agent.ts";
-import { createClaudeClient } from "../core/model.ts";
-import { createMockClient } from "./mock.ts";
-import { gtmPolicy, gtmSystemPrompt } from "./policy.ts";
+import { runGtm } from "./agent.ts";
 import { signups } from "./scoring.ts";
-import { gtmTools } from "./tools.ts";
 
 const args = process.argv.slice(2);
 const flag = (name: string) => args.includes(`--${name}`);
@@ -33,13 +29,11 @@ if (!signups.some((s) => s.id === signupId)) {
   process.exit(1);
 }
 
-const model = flag("mock") ? createMockClient() : createClaudeClient();
-
-await runAgent({
-  policy: gtmPolicy,
-  tools: gtmTools,
-  model,
-  system: gtmSystemPrompt,
-  task: `Route this new signup. signup_id: ${signupId}`,
-});
+try {
+  await runGtm({ task: `Route this new signup. signup_id: ${signupId}`, mock: flag("mock") });
+} catch (err) {
+  // e.g. the agent's own API key is missing: refuse clearly, no stack trace
+  console.error(`\n⛔ ${err instanceof Error ? err.message : String(err)}\n`);
+  process.exit(1);
+}
 
