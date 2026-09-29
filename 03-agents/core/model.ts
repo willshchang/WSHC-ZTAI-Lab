@@ -8,15 +8,28 @@
 // ============================================================
 
 import Anthropic from "@anthropic-ai/sdk";
-import type { Block, ModelClient, ModelRequest, ModelTurn } from "./types.ts";
+import type { AgentPolicy, Block, ModelClient, ModelRequest, ModelTurn } from "./types.ts";
 
 // Cheap and fast by default; override with ANTHROPIC_MODEL in .env
 const DEFAULT_MODEL = "claude-haiku-4-5-20251001";
 
-export function createClaudeClient(): ModelClient {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+// ------------------------------------------------------------
+// ONE KEY PER AGENT, OR NO RUN
+// ------------------------------------------------------------
+// WHY: each agent reads only its own key (named in its policy).
+// Spend shows per agent in the Console, and one key can be revoked
+// without touching the others. If the key is missing, the agent
+// refuses to run. It never falls back to a shared key: a fallback
+// would quietly turn one agent's credential into everyone's.
+// ------------------------------------------------------------
+export function createClaudeClient(policy: AgentPolicy): ModelClient {
+  const apiKey = process.env[policy.apiKeyEnv];
   if (!apiKey) {
-    throw new Error("ANTHROPIC_API_KEY is not set. Add it to .env, or run with --mock.");
+    throw new Error(
+      `Refusing to run ${policy.id}: ${policy.apiKeyEnv} is not set. ` +
+        `Each agent needs its own API key and never borrows another's. ` +
+        `Add it to .env, or run with --mock.`,
+    );
   }
   const model = process.env.ANTHROPIC_MODEL || DEFAULT_MODEL;
   const client = new Anthropic({ apiKey });

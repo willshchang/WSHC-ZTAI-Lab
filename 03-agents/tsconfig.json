@@ -15,5 +15,5 @@
     "skipLibCheck": true,
     "types": ["node"]
   },
-  "include": ["core/**/*.ts", "gtm-signal-router/**/*.ts"]
+  "include": ["core/**/*.ts", "gtm-signal-router/**/*.ts", "scarlet/**/*.ts"]
 }

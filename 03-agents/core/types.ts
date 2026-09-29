@@ -35,6 +35,22 @@ export interface AgentPolicy {
   purpose: string;        // one sentence: the single job this agent does
   allowedTools: string[]; // least privilege: the only tools it may call
   maxSteps: number;       // hard stop so a confused agent can't loop forever
+  apiKeyEnv: string;      // the .env variable holding THIS agent's own API key
+  canDelegateTo?: string[]; // coordinators only: agent ids it may hand work to
+}
+
+// ------------------------------------------------------------
+// PARENT LINK (coordinator -> agent handoffs)
+// ------------------------------------------------------------
+// WHY: when a coordinator hands work to another agent, both traces
+// must be joinable. One requestId runs through the whole request;
+// the child also records which run started it. Same parent/child
+// idea as OpenTelemetry spans.
+// ------------------------------------------------------------
+export interface ParentRef {
+  requestId: string; // shared by every trace in one request
+  agentId: string;   // who handed the work over
+  runId: string;     // the exact run that handed it over
 }
 
 export interface ToolContext {

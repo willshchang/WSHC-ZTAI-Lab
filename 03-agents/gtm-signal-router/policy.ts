@@ -17,6 +17,7 @@ export const gtmPolicy: AgentPolicy = {
     "report_friction",
   ],
   maxSteps: 10,
+  apiKeyEnv: "ANTHROPIC_API_KEY_GTM",
 };
 
 export const gtmSystemPrompt = `You are the GTM Signal Router for a developer-tools company.

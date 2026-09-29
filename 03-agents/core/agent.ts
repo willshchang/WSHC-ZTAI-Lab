@@ -16,6 +16,7 @@ import type {
   AgentTool,
   Message,
   ModelClient,
+  ParentRef,
   ToolResultBlock,
 } from "./types.ts";
 
@@ -25,13 +26,16 @@ export interface RunOptions {
   model: ModelClient;
   system: string;
   task: string;
+  parent?: ParentRef; // set when a coordinator handed this work over
 }
 
 export interface RunResult {
   runId: string;
+  requestId: string;
   traceFile: string;
   finalText: string;
   steps: number;
+  outcome: "completed" | "max_steps_reached";
 }
 
 const log = (msg: string) => console.log(msg);
@@ -59,8 +63,8 @@ function preview(input: Record<string, unknown>): string {
 }
 
 export async function runAgent(opts: RunOptions): Promise<RunResult> {
-  const { policy, model, system, task } = opts;
-  const trace = new Trace(policy.id);
+  const { policy, model, system, task, parent } = opts;
+  const trace = new Trace(policy.id, parent?.requestId);
 
   // ----------------------------------------------------------
   // LEAST PRIVILEGE, LAYER 1: the model only SEES allowed tools
@@ -73,8 +77,10 @@ export async function runAgent(opts: RunOptions): Promise<RunResult> {
     purpose: policy.purpose,
     toolsOffered: offered.map((t) => `${t.name} (${t.risk})`),
     task,
+    ...(parent ? { parentAgent: parent.agentId, parentRunId: parent.runId } : {}),
   });
   log(`\n▶ ${policy.name} [${policy.id}] | model: ${model.label} | run: ${trace.runId}`);
+  if (parent) log(`  Requested by ${parent.agentId} | request: ${trace.requestId}`);
   log(`  Tools allowed: ${offered.map((t) => t.name).join(", ")}\n`);
 
   const messages: Message[] = [{ role: "user", content: task }];
@@ -96,8 +102,15 @@ export async function runAgent(opts: RunOptions): Promise<RunResult> {
         .join("\n")
         .trim();
       trace.record("run_end", { outcome: "completed", steps: step });
-      log(`\n✅ Done in ${step} step(s). Trace: ${trace.file}\n`);
-      return { runId: trace.runId, traceFile: trace.file, finalText, steps: step };
+      log(`\n✅ ${policy.name} done in ${step} step(s). Trace: ${trace.file}\n`);
+      return {
+        runId: trace.runId,
+        requestId: trace.requestId,
+        traceFile: trace.file,
+        finalText,
+        steps: step,
+        outcome: "completed",
+      };
     }
 
     const results: ToolResultBlock[] = [];
@@ -112,8 +125,15 @@ export async function runAgent(opts: RunOptions): Promise<RunResult> {
   // STEP LIMIT: a confused agent stops instead of looping forever
   // ----------------------------------------------------------
   trace.record("run_end", { outcome: "max_steps_reached", steps: policy.maxSteps });
-  log(`\n⛔ Stopped: reached the ${policy.maxSteps}-step limit. Trace: ${trace.file}\n`);
-  return { runId: trace.runId, traceFile: trace.file, finalText, steps: policy.maxSteps };
+  log(`\n⛔ ${policy.name} stopped: reached the ${policy.maxSteps}-step limit. Trace: ${trace.file}\n`);
+  return {
+    runId: trace.runId,
+    requestId: trace.requestId,
+    traceFile: trace.file,
+    finalText,
+    steps: policy.maxSteps,
+    outcome: "max_steps_reached",
+  };
 }
 
 async function handleToolCall(

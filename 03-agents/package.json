@@ -10,6 +10,8 @@
   "scripts": {
     "gtm": "node --env-file-if-exists=.env gtm-signal-router/index.ts",
     "gtm:mock": "node --env-file-if-exists=.env gtm-signal-router/index.ts --mock",
+    "scarlet": "node --env-file-if-exists=.env scarlet/index.ts",
+    "scarlet:mock": "node --env-file-if-exists=.env scarlet/index.ts --mock",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
