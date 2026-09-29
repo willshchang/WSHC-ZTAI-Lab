@@ -36,6 +36,28 @@ export interface RunResult {
 
 const log = (msg: string) => console.log(msg);
 
+// ----------------------------------------------------------
+// CONSOLE PREVIEW: long tool inputs (like a full Slack message)
+// are shortened on screen so the log stays readable. The trace
+// file and the approval prompt still show the FULL input.
+// ----------------------------------------------------------
+const PREVIEW_CHARS = 60;
+function preview(input: Record<string, unknown>): string {
+  const short = Object.fromEntries(
+    Object.entries(input).map(([key, value]) => {
+      if (typeof value !== "string") return [key, value];
+      const oneLine = value.replace(/\s+/g, " ").trim();
+      return [
+        key,
+        oneLine.length > PREVIEW_CHARS
+          ? `${oneLine.slice(0, PREVIEW_CHARS)}... (${value.length} chars)`
+          : oneLine,
+      ];
+    }),
+  );
+  return JSON.stringify(short);
+}
+
 export async function runAgent(opts: RunOptions): Promise<RunResult> {
   const { policy, model, system, task } = opts;
   const trace = new Trace(policy.id);
@@ -117,7 +139,7 @@ async function handleToolCall(
     };
   }
 
-  log(`🔧 ${tool.name} (${tool.risk}) ${JSON.stringify(call.input)}`);
+  log(`🔧 ${tool.name} (${tool.risk}) ${preview(call.input)}`);
   trace.record("tool_call", { tool: tool.name, risk: tool.risk, input: call.input });
 
   // ----------------------------------------------------------
