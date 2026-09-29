@@ -149,7 +149,11 @@ WSHC-ZTAI-Lab/
 │   └── docs/                ← subnet routing, ACL, network architecture, Tailscale SSH
 │       └── iac/             ← one doc per Terraform file
 │
-└── .github/workflows/       ← CI validation for both layers
+├── 03-agents/               ← Layer 3: Zero Trust AI agents (in progress)
+│   ├── core/                ← shared agent engine: policy, approval, trace
+│   └── gtm-signal-router/   ← first agent: routes signups, human-approved
+│
+└── .github/workflows/       ← CI: Terraform validation + agent checks
 ```
 
 ---
@@ -257,7 +261,7 @@ terraform apply
 | **Tailscale SSH `check` mode** | Forces a fresh identity check before a privileged SSH session |
 | **Terraform remote state** | Shared, locked state for team use instead of a local state file |
 | **Automated access reviews** | Scheduled review of who still needs what |
-| **`03-agents/`** | Extend the same identity and network controls to AI agents: scoped identities per agent, least-privilege tool access, network-level containment |
+| **`03-agents/`** (in progress) | Extend the same identity and network controls to AI agents: scoped identities per agent, least-privilege tool access, human approval, traces. First agent built: [GTM Signal Router](./03-agents/README.md). Next: JML agent, network-level containment |
 | **Agent observability** | Follow every agent run end to end and live: what triggered it, what it decided, which identity it used, what it touched and the outcome. One OpenTelemetry trace per run, identity on every span, secrets redacted before storage. Today the lab has visibility only (Tailscale configuration audit logs); network flow logs require a Tailscale Premium or Enterprise plan. |
 
 ---
