@@ -16,6 +16,8 @@
 //      the no-silent-failure guard must fire
 //   7. "route it" in a session         -> uses session memory to find
 //      the signup, still hands off the exact contract task
+//   8. a question ("what can you do about pixel-pine?") -> offer
+//      first; act only on a yes; no one there -> stand_by
 // ============================================================
 
 import type { Block, Message, ModelClient, ModelTurn } from "../core/types.ts";
@@ -111,6 +113,36 @@ export function createScarletMock(): ModelClient {
           "stand_by",
           { reason: failed(asked) ? "No task, and no one is at the keyboard" : "Will has no task right now" },
           "Nothing to do right now.",
+        );
+      }
+
+      // Scenario 8: a QUESTION about a signup -> offer first, act only on a yes
+      const isQuestion = /\?\s*$|^\s*(what|how|can you|could you|should)\b/i.test(request);
+      const mentioned = findSignup(request);
+      if (isQuestion && mentioned) {
+        if (!asked) {
+          return toolUse(
+            "ask_human",
+            {
+              question:
+                `I can route ${mentioned.id} through the GTM Signal Router. It scores the signup and ` +
+                `posts the route to #gtm-routing once you approve. Want me to?`,
+            },
+            "That's a question, so I'll offer before acting.",
+          );
+        }
+        const answer = failed(asked) ? "" : String(JSON.parse(asked.output).answer ?? "");
+        if (/\b(yes|yep|sure|go|do it|route it|please)\b/i.test(answer)) {
+          return toolUse(
+            "delegate",
+            { agent: "agent-gtm-signal-router", task: `Route this new signup. signup_id: ${mentioned.id}` },
+            `On it. Handing ${mentioned.id} to the GTM Signal Router.`,
+          );
+        }
+        return toolUse(
+          "stand_by",
+          { reason: failed(asked) ? "Question not confirmed: no one at the keyboard" : "Will declined the offer" },
+          "Okay, I won't start anything.",
         );
       }
 

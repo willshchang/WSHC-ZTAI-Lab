@@ -13,6 +13,7 @@
     "scarlet": "node --env-file-if-exists=.env scarlet/index.ts",
     "scarlet:mock": "node --env-file-if-exists=.env scarlet/index.ts --mock",
     "test:contract": "node tests/scarlet-contract.ts",
+    "test:policy": "node tests/policy-enforcement.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

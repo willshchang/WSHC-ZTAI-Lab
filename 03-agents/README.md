@@ -121,6 +121,7 @@ she held the other agents' tools, she would be the god-mode agent by the back do
 | **The handoff contract** | A task must match the agent's exact format (`agents.json`). Injected or garbled text is rejected before the agent starts |
 | **Knowledge is not permission** | `agents.json` describes the agents. Who she may hand work to is set only in her policy, in code |
 | **Fails closed** | A malformed `agents.json`, or one naming an agent with no runner, stops Scarlet from starting |
+| **Commands vs questions** | A command ("route pixel-pine") is acted on right away. A question ("what can you do about pixel-pine?") gets an offer first, and only a yes starts the job. Two separate consents: to the task (Scarlet's offer) and to the action (the agent's approval gate) |
 | **Human in the loop, both ways** | With Will at the keyboard she can ask; with no one there the question is denied and she reports the gap. Max 3 questions; answers never change her permissions |
 | **No silent failure** | If she ends by only talking, she gets one reminder. Then the system files the alert, marks the run `no_action`, and shows a warning. Standing by counts as acting only because it's an explicit, traced decision |
 | **Session memory, hers alone** | In a chat session she remembers the last 20 messages (text only, never raw tool data), so "route it" works. Workers never see it: the contract task is all they get. Wiped on `exit` or after 30 minutes idle, never saved to disk. One session ID joins every trace in the session |
@@ -134,6 +135,7 @@ she held the other agents' tools, she would be the god-mode agent by the back do
 | `"offboard jane from the directory"` | A fooled model reaches for an agent outside her policy (`agent-jml`), and the runtime blocks it |
 | `"route the new signup"` | No signup id: she reports the gap, then asks Will. With no one at the keyboard the question is denied |
 | `"write me a poem about tacos"` | No agent owns this job: reported, not guessed |
+| `"what can you do about pixel-pine?"` | A question: she offers first. With no one at the keyboard, the offer goes unanswered and she stands by. No job starts without a yes |
 | `"hello scarlet"` | No task: she asks what Will needs. "Nothing" (or no one at the keyboard) ends in `stand_by`, not a report |
 | `"simulate a chatty model"` | A model that only chats and never acts: reminder, then a system alert |
 
@@ -174,6 +176,7 @@ npm run scarlet
 
 npm run gtm -- --list      # show all signup ids
 npm run test:contract      # handoff contract test
+npm run test:policy        # policy blocks a tool that exists but isn't allowed
 npm run typecheck          # type-check everything
 ```
 
@@ -182,6 +185,12 @@ Without Slack webhooks, posts are printed as a dry run instead of sent.
 > **Mock mode** replaces only the model with a scripted one. Policy checks,
 > human approval, tools, traces and Slack all run for real. The `quickship-labs`
 > run plays a fooled model on purpose, to prove the policy layer still blocks it.
+
+**How the tests are tested:** each safety control was deliberately broken
+(allowlist bypassed, default deny disabled, contract loosened, shared-key
+fallback added, and more) to confirm CI fails. A check that can't fail proves
+nothing. This sweep found and fixed four checks that were passing for the wrong
+reason.
 
 ---
 

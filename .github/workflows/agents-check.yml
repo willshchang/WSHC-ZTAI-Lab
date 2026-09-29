@@ -106,7 +106,7 @@ jobs:
         run: |
           out=$(npm run -s scarlet:mock -- "route the new signup" < /dev/null)
           echo "$out"
-          grep -q "ask_human" <<< "$out" || { echo "FAIL: she didn't ask"; exit 1; }
+          grep -q "🔧 ask_human" <<< "$out" || { echo "FAIL: she didn't ask"; exit 1; }
           grep -q "question is DENIED by default" <<< "$out" || { echo "FAIL: question not denied without a human"; exit 1; }
 
       - name: "Scarlet: a greeting with no one at the keyboard ends in stand_by, not a report"
@@ -116,6 +116,14 @@ jobs:
           grep -q "is standing by" <<< "$out" || { echo "FAIL: no stand_by"; exit 1; }
           grep -q "🔧 report_friction" <<< "$out" && { echo "FAIL: a greeting was reported as friction"; exit 1; }
           grep -q "Scarlet done in" <<< "$out" || { echo "FAIL: did not finish cleanly"; exit 1; }
+
+      - name: "Scarlet: a question is offered, never acted on, with no one at the keyboard"
+        run: |
+          out=$(npm run -s scarlet:mock -- "what can you do about pixel-pine?" < /dev/null)
+          echo "$out"
+          grep -q "🔧 ask_human" <<< "$out" || { echo "FAIL: she didn't offer"; exit 1; }
+          grep -q "hands off" <<< "$out" && { echo "FAIL: a question started a job without a yes"; exit 1; }
+          grep -q "is standing by" <<< "$out" || { echo "FAIL: no stand_by after an unconfirmed question"; exit 1; }
 
       - name: "Session mode refuses to start without a person at the keyboard"
         run: |
@@ -132,6 +140,9 @@ jobs:
 
       - name: "Handoff contract: malformed or injected tasks are rejected"
         run: npm run -s test:contract < /dev/null
+
+      - name: "Policy blocks a tool that exists but isn't allowed"
+        run: npm run -s test:policy < /dev/null
 
       - name: "Every agent refuses to run without its own API key"
         run: |
