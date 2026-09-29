@@ -1,0 +1,8 @@
+# Secrets: API keys and webhook URLs never leave this machine
+.env
+
+# Dependencies
+node_modules/
+
+# Agent run traces (may contain signup data)
+traces/

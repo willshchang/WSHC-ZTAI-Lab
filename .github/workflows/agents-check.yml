@@ -1,0 +1,74 @@
+# ============================================================
+# AGENTS CHECK PIPELINE
+# ============================================================
+# Runs on every push and pull request that touches 03-agents/.
+#
+# What this pipeline checks:
+# 1. typecheck   — the TypeScript compiles with strict settings
+# 2. smoke tests — each demo scenario runs end to end in mock
+#                  mode (no API key, no secrets needed)
+#
+# Why the smoke tests prove safety, not just "it runs":
+# CI has no interactive terminal, so every external write hits
+# the approval gate and is DENIED BY DEFAULT. A green run means
+# the agent could not post anything without a human.
+#
+# Official reference:
+# https://docs.github.com/en/actions/use-cases-and-examples/building-and-testing/building-and-testing-nodejs
+# ============================================================
+
+name: Agents Check
+
+on:
+  push:
+    paths:
+      - '03-agents/**'
+      - '.github/workflows/agents-check.yml'
+  pull_request:
+    paths:
+      - '03-agents/**'
+      - '.github/workflows/agents-check.yml'
+
+jobs:
+  check:
+    name: Typecheck and smoke test agents
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: 03-agents
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: 03-agents/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Smoke test every scenario (mock mode, default deny)
+        run: |
+          for id in northwind-transit pixel-pine sam-side-project harbor-health quickship-labs; do
+            echo "::group::$id"
+            out=$(npm run -s gtm:mock -- --signup "$id" < /dev/null)
+            echo "$out"
+            # Must finish cleanly
+            echo "$out" | grep -q "Done in" || { echo "FAIL: $id did not complete"; exit 1; }
+            # Must never post without a human
+            echo "$out" | grep -q "Would post to #gtm-routing" && { echo "FAIL: $id posted without approval"; exit 1; }
+            echo "::endgroup::"
+          done
+
+      - name: Injection scenario must be blocked by policy
+        run: |
+          out=$(npm run -s gtm:mock -- --signup quickship-labs < /dev/null)
+          echo "$out" | grep -q 'Denied: "export_all_contacts"' || { echo "FAIL: injected tool call was not blocked"; exit 1; }
+          echo "OK: injected tool call blocked by policy"
