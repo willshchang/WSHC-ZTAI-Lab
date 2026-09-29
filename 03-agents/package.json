@@ -12,6 +12,8 @@
     "gtm:mock": "node --env-file-if-exists=.env gtm-signal-router/index.ts --mock",
     "scarlet": "node --env-file-if-exists=.env scarlet/index.ts",
     "scarlet:mock": "node --env-file-if-exists=.env scarlet/index.ts --mock",
+    "jml": "node --env-file-if-exists=.env jml/index.ts",
+    "jml:mock": "node --env-file-if-exists=.env jml/index.ts --mock",
     "test:contract": "node tests/scarlet-contract.ts",
     "test:policy": "node tests/policy-enforcement.ts",
     "typecheck": "tsc --noEmit"
