@@ -34,7 +34,7 @@ Most agent demos give the model one admin key and hope. Here every agent gets:
 |---|---|---|
 | **GTM Signal Router** | Score a new signup from product signals and route it to sales, nurture or self-serve | Built |
 | **Scarlet** (main agent, coordinator) | Read a request and hand it to the one agent whose job it is. Asks Will when a detail is missing. Holds no data tools | Built |
-| JML Agent | Joiner, mover and leaver changes on the identity layer, with human approval for leavers | Planned |
+| **JML Agent** | Joiner, mover and leaver changes on the identity layer. Every tenant change needs human approval | Built |
 
 ---
 
@@ -148,6 +148,82 @@ knowledge that grows over time).
 limits the damage: Scarlet can only choose real agents, her answers must quote
 real results, and every step is traced so anyone can check it.
 
+## JML Agent (Joiner, Mover, Leaver)
+
+Processes one HR event at a time on the identity layer (Entra ID): joiners get an
+account, movers change team, leavers are disabled, have their sessions revoked,
+lose their team groups and land in `JML-Terminated` for audit and legal hold.
+**Every tenant change waits for a human.**
+
+**Tools and risk tiers:**
+
+| Tool | Risk | What it does |
+|---|---|---|
+| `get_hr_event` | read | Reads one event from the HR feed |
+| `plan_hr_change` | read | Plain code builds the exact list of changes, or refuses with a reason |
+| `apply_hr_change` | external-write | Applies the code-built plan after approval. Takes only an event id |
+| `report_friction` | internal-write | Reports a refusal instead of working around it |
+
+**Least-privilege Microsoft Graph permissions** (application, on the
+`wshc-agent-jml` app registration, owned by a named human):
+
+| Permission | Used for |
+|---|---|
+| `User.Read.All` | Find a user by email |
+| `User.Create` | Joiners (not the broader `User.ReadWrite.All`) |
+| `User.EnableDisableAccount.All` | Leavers: disable |
+| `User.RevokeSessions.All` | Leavers: sign out everywhere |
+| `GroupMember.ReadWrite.All` | Team moves, JML-Managed, JML-Terminated |
+
+No delete permission is granted, so users can't be deleted even by mistake.
+Listing a user's groups would need `Directory.Read.All`, so membership is
+checked from the group side instead. Microsoft also requires an admin role to
+disable admins or touch role-assignable groups, which the app never gets.
+
+**Guards (in code, before any plan exists):**
+
+| Guard | What it stops |
+|---|---|
+| Protected accounts | Break-glass and admin group members are never touched |
+| Scope | Only users JML created (members of `JML-Managed`). Terraform-managed users are refused, so the agent never fights the code that is the source of truth |
+| Name clash | A joiner whose username belongs to someone JML doesn't manage is refused, never merged |
+| Unknown team | Refused, never guessed |
+| Idempotent | A finished event plans to "nothing to change" |
+| Reversible | Leavers are disabled, never deleted |
+| No stale plans | Apply re-plans first; if the tenant changed since approval, nothing runs |
+| Model can't write changes | Apply takes an event id only and runs the plan the code built |
+| Stop on first error | Reports exactly what completed, what failed and what wasn't done |
+| Secrets | Temporary passwords are random, never printed, traced or returned |
+
+**The approval box** shows the display name, email and **object ID** (names
+clash in big orgs), every change, and `⚠ HIGH RISK: LEAVER` for offboarding.
+
+**Mock tenant by default.** "Graph" here is Microsoft Graph, the API into Entra
+(not LangGraph). Without `--graph real` the agent runs against a local fake
+tenant, so a missed flag can never touch the real directory. The real tenant
+also needs `jml/tenant.local.json` (group IDs from `terraform output`) and the
+`ENTRA_*` credentials, or it refuses to start.
+
+**Static groups:** the lab's team groups are dynamic (rule-filled), so nothing
+can add members by hand. JML's static groups are defined in
+`01-identity/terraform/jml.tf`, keeping code as the source of truth.
+
+**Demo scenarios:**
+
+| Event | What it shows |
+|---|---|
+| `hr-1001` | Joiner Maya Chen to Frontend |
+| `hr-1002` | Mover Maya to Product |
+| `hr-1003` | Leaver Maya (high risk), then a rerun that changes nothing |
+| `hr-1004` | Leaver for the break-glass account: refused, protected |
+| `hr-1005` | Leaver for a Terraform-managed user: refused, out of scope |
+| `hr-1006` | Joiner to an unknown team: refused |
+
+**Future design:** split into Joiner, Mover and Leaver agents, each with its own
+app registration and only its own permissions (the Leaver can't create users),
+solved together with secret sprawl so three agents never means three more
+secrets.
+
 ---
 
 ## Quick Start
@@ -174,9 +250,16 @@ npm run scarlet -- "route the harbor-health signup"
 # Chat session with Scarlet (needs a terminal; type "exit" to leave)
 npm run scarlet
 
+# JML agent: mock tenant by default, real tenant only with --graph real
+npm run jml -- --list
+npm run jml:mock -- --event hr-1001
+npm run jml -- --event hr-1001 --graph real
+npm run jml -- --reset-mock
+
 npm run gtm -- --list      # show all signup ids
 npm run test:contract      # handoff contract test
 npm run test:policy        # policy blocks a tool that exists but isn't allowed
+npm run test:jml           # JML guards, executor, stale plans, password handling
 npm run typecheck          # type-check everything
 ```
 
@@ -226,6 +309,11 @@ because the admin API isn't available on individual accounts.
 | Claude models | https://platform.claude.com/docs/en/models/overview |
 | Node.js TypeScript support | https://nodejs.org/api/typescript.html |
 | Slack incoming webhooks | https://api.slack.com/messaging/webhooks |
+| Microsoft Graph: create user (`User.Create`) | https://learn.microsoft.com/en-us/graph/api/user-post-users |
+| Microsoft Graph: update user (`accountEnabled`, admin roles) | https://learn.microsoft.com/en-us/graph/api/user-update |
+| Microsoft Graph: revoke sign-in sessions | https://learn.microsoft.com/en-us/graph/api/user-revokesigninsessions |
+| Microsoft Graph: add group member (role-assignable limits) | https://learn.microsoft.com/en-us/graph/api/group-post-members |
+| Microsoft Graph: list memberOf (needs `Directory.Read.All`) | https://learn.microsoft.com/en-us/graph/api/user-list-memberof |
 | Claude Usage and Cost API | https://platform.claude.com/docs/en/manage-claude/usage-cost-api |
 | Claude Console workspaces and spend limits | https://platform.claude.com/docs/en/manage-claude/workspaces |
 | LangGraph recursion limit (no-loop design) | https://docs.langchain.com/oss/python/langgraph/errors/GRAPH_RECURSION_LIMIT |

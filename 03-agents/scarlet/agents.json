@@ -19,6 +19,24 @@
           "action": "signup_id is missing: report_friction (missing_data), then ask_human which signup"
         }
       ]
+    },
+    {
+      "id": "agent-jml",
+      "name": "JML Agent",
+      "handles": "HR events on the identity layer: joiners (create account), movers (change team), leavers (disable, revoke sessions, move to JML-Terminated). Every change waits for Will's approval.",
+      "taskFormat": "Process HR event. event_id: <event_id>",
+      "taskPattern": "^Process HR event\\. event_id: hr-[0-9]{4}$",
+      "idFormat": "HR event ids look like hr-1001: the letters hr, a hyphen and four digits. A request that names one is complete.",
+      "examples": [
+        {
+          "request": "process hr-1001",
+          "action": "delegate with task: Process HR event. event_id: hr-1001"
+        },
+        {
+          "request": "offboard maya",
+          "action": "no event id: report_friction (missing_data), then ask_human which HR event"
+        }
+      ]
     }
   ]
 }

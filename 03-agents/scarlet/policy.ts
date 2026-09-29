@@ -19,7 +19,7 @@ export const scarletPolicy: AgentPolicy = {
   allowedTools: ["delegate", "report_friction", "ask_human", "stand_by"],
   // PERMISSION lives here, in code. agents.json is only knowledge:
   // listing an agent there gives Scarlet no access on its own.
-  canDelegateTo: ["agent-gtm-signal-router"],
+  canDelegateTo: ["agent-gtm-signal-router", "agent-jml"],
   // No silent failure: she must hand off, report, or stand by on the
   // record before she ends. Plain talk alone never counts.
   requiredActions: ["delegate", "report_friction", "stand_by"],

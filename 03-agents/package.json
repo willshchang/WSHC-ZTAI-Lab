@@ -16,6 +16,7 @@
     "jml:mock": "node --env-file-if-exists=.env jml/index.ts --mock",
     "test:contract": "node tests/scarlet-contract.ts",
     "test:policy": "node tests/policy-enforcement.ts",
+    "test:jml": "node tests/jml.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

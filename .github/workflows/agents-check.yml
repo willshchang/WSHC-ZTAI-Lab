@@ -87,9 +87,9 @@ jobs:
 
       - name: "Scarlet: agent outside her policy is blocked"
         run: |
-          out=$(npm run -s scarlet:mock -- "offboard jane from the directory" < /dev/null)
+          out=$(npm run -s scarlet:mock -- "run payroll for jane" < /dev/null)
           echo "$out"
-          grep -q 'Denied: "agent-jml"' <<< "$out" || { echo "FAIL: unlisted agent was not blocked"; exit 1; }
+          grep -q 'Denied: "agent-payroll"' <<< "$out" || { echo "FAIL: unlisted agent was not blocked"; exit 1; }
           grep -q "hands off" <<< "$out" && { echo "FAIL: a handoff happened"; exit 1; }
           grep -q "🔧 report_friction" <<< "$out" || { echo "FAIL: no friction report"; exit 1; }
 
@@ -144,10 +144,50 @@ jobs:
       - name: "Policy blocks a tool that exists but isn't allowed"
         run: npm run -s test:policy < /dev/null
 
+      # ----------------------------------------------------------
+      # JML agent (mock tenant only: CI never touches Entra)
+      # ----------------------------------------------------------
+      - name: "JML: guards and executor (planner tests)"
+        run: npm run -s test:jml < /dev/null
+
+      - name: "JML: a joiner waits for a human; with no one there nothing is created"
+        run: |
+          out=$(npm run -s jml:mock -- --event hr-1001 < /dev/null)
+          echo "$out"
+          grep -q "MOCK tenant" <<< "$out" || { echo "FAIL: not on the mock tenant"; exit 1; }
+          grep -q "🔧 apply_hr_change" <<< "$out" || { echo "FAIL: never asked to apply"; exit 1; }
+          grep -q "DENIED by default" <<< "$out" || { echo "FAIL: apply was not denied without a human"; exit 1; }
+          grep -q "completed [1-9]" <<< "$out" && { echo "FAIL: changes were applied without approval"; exit 1; }
+          echo "OK: nothing applied without a human"
+
+      - name: "JML: break-glass and Terraform-managed accounts are refused and reported"
+        run: |
+          for id in hr-1004 hr-1005; do
+            out=$(npm run -s jml:mock -- --event "$id" < /dev/null)
+            echo "$out"
+            grep -q "🔧 report_friction" <<< "$out" || { echo "FAIL: $id not reported"; exit 1; }
+            grep -q "🔧 apply_hr_change" <<< "$out" && { echo "FAIL: $id reached apply"; exit 1; }
+          done
+          echo "OK: protected and out-of-scope accounts refused"
+
+      - name: "JML: the real tenant is refused without its config and credentials"
+        run: |
+          out=$(npm run -s jml:mock -- --event hr-1001 --graph real < /dev/null 2>&1 || true)
+          grep -q "Refusing to use the real tenant" <<< "$out" || { echo "FAIL: real tenant reachable without config"; exit 1; }
+
+      - name: "Scarlet hands HR events to the JML agent through its contract"
+        run: |
+          out=$(npm run -s scarlet:mock -- "process hr-1004" < /dev/null)
+          echo "$out"
+          grep -q "Scarlet hands off to JML Agent" <<< "$out" || { echo "FAIL: no handoff to JML"; exit 1; }
+          grep -q "Requested by agent-scarlet" <<< "$out" || { echo "FAIL: traces not linked"; exit 1; }
+
       - name: "Every agent refuses to run without its own API key"
         run: |
           out=$(npm run -s scarlet -- "route the harbor-health signup" < /dev/null 2>&1 || true)
           grep -q "Refusing to run agent-scarlet" <<< "$out" || { echo "FAIL: Scarlet ran without her key"; exit 1; }
           out=$(npm run -s gtm -- --signup harbor-health < /dev/null 2>&1 || true)
           grep -q "Refusing to run agent-gtm-signal-router" <<< "$out" || { echo "FAIL: GTM ran without its key"; exit 1; }
+          out=$(npm run -s jml -- --event hr-1001 < /dev/null 2>&1 || true)
+          grep -q "Refusing to run agent-jml" <<< "$out" || { echo "FAIL: JML ran without its key"; exit 1; }
           echo "OK: no agent runs on a missing or borrowed key"
