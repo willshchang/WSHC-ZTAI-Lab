@@ -10,8 +10,12 @@
 //   3. signup request with no id       -> friction, then ask_human
 //      (denied with no one at the keyboard; answered at a terminal)
 //   4. request no agent handles        -> friction, no guessing
-//   5. a greeting ("hello scarlet")    -> simulated model that just
-//      chats and never acts; the no-silent-failure guard fires
+//   5. a greeting ("hello scarlet")    -> ask Will what he needs;
+//      no task (or no one there) -> stand_by on the record
+//   6. "simulate a chatty model"       -> a model that only talks;
+//      the no-silent-failure guard must fire
+//   7. "route it" in a session         -> uses session memory to find
+//      the signup, still hands off the exact contract task
 // ============================================================
 
 import type { Block, Message, ModelClient, ModelTurn } from "../core/types.ts";
@@ -60,7 +64,14 @@ export function createScarletMock(): ModelClient {
   return {
     label: "MOCK (scripted, no API)",
     next: async ({ messages }) => {
-      const request = typeof messages[0]?.content === "string" ? messages[0].content : "";
+      // The current request is the latest plain-text message from Will
+      // (earlier ones are session memory; the reminder is from the engine)
+      const said = messages
+        .filter((m) => m.role === "user" && typeof m.content === "string")
+        .map((m) => m.content as string)
+        .filter((c) => !c.startsWith("You ended without acting"));
+      const request = said.at(-1) ?? "";
+      const earlier = said.slice(0, -1).join(" ");
       const done = history(messages);
       const last = (name: string) => [...done].reverse().find((d) => d.name === name);
       const failed = (d?: Done) => Boolean(d?.output.startsWith("Tool error"));
@@ -74,9 +85,43 @@ export function createScarletMock(): ModelClient {
         return finish(`Handed to ${r.agent} (${r.outcome}). Its result, verbatim: "${r.result_text}"`);
       }
 
-      // Scenario 5: a model that only chats and never acts
-      if (/^\s*(hi|hello|hey)\b/i.test(request)) {
+      // Standing by is always a clean finish
+      if (last("stand_by")) return finish("Standing by. Just say the word when you need me.");
+
+      // Scenario 6: a model that only chats and never acts
+      if (/simulate a chatty model/i.test(request)) {
         return finish("[simulated chatty model] Hi Will! What would you like me to work on today?");
+      }
+
+      // Scenario 5: a greeting with no task -> ask, then act on the answer
+      if (/^\s*(hi|hello|hey)\b/i.test(request)) {
+        if (!asked) {
+          return toolUse("ask_human", { question: "Hi Will! What can I help with?" }, "No task yet, so I'll ask.");
+        }
+        const answer = failed(asked) ? "" : String(JSON.parse(asked.output).answer ?? "");
+        const answered = findSignup(answer);
+        if (answered) {
+          return toolUse(
+            "delegate",
+            { agent: "agent-gtm-signal-router", task: `Route this new signup. signup_id: ${answered.id}` },
+            `On it. Handing ${answered.id} to the GTM Signal Router.`,
+          );
+        }
+        return toolUse(
+          "stand_by",
+          { reason: failed(asked) ? "No task, and no one is at the keyboard" : "Will has no task right now" },
+          "Nothing to do right now.",
+        );
+      }
+
+      // Scenario 7: "route it" -> session memory resolves which signup
+      const remembered = /\b(it|that one|same one)\b/i.test(request) ? findSignup(earlier) : undefined;
+      if (remembered && !findSignup(request)) {
+        return toolUse(
+          "delegate",
+          { agent: "agent-gtm-signal-router", task: `Route this new signup. signup_id: ${remembered.id}` },
+          `From earlier in our chat, "it" is ${remembered.id}. Handing it to the GTM Signal Router.`,
+        );
       }
 
       // Scenario 2: a fooled model reaches for an agent it was never given

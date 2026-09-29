@@ -28,6 +28,10 @@ export interface RunOptions {
   system: string;
   task: string;
   parent?: ParentRef; // set when a coordinator handed this work over
+  // SESSION MEMORY (main agents only): earlier messages from the same
+  // chat session, text only. Never passed on to other agents.
+  history?: Message[];
+  sessionId?: string;
 }
 
 export interface RunResult {
@@ -65,7 +69,8 @@ function preview(input: Record<string, unknown>): string {
 
 export async function runAgent(opts: RunOptions): Promise<RunResult> {
   const { policy, model, system, task, parent } = opts;
-  const trace = new Trace(policy.id, parent?.requestId);
+  const sessionId = opts.sessionId ?? parent?.sessionId;
+  const trace = new Trace(policy.id, parent?.requestId, sessionId);
 
   // ----------------------------------------------------------
   // LEAST PRIVILEGE, LAYER 1: the model only SEES allowed tools
@@ -79,12 +84,13 @@ export async function runAgent(opts: RunOptions): Promise<RunResult> {
     toolsOffered: offered.map((t) => `${t.name} (${t.risk})`),
     task,
     ...(parent ? { parentAgent: parent.agentId, parentRunId: parent.runId } : {}),
+    rememberedMessages: opts.history?.length ?? 0,
   });
   log(`\n▶ ${policy.name} [${policy.id}] | model: ${model.label} | run: ${trace.runId}`);
   if (parent) log(`  Requested by ${parent.agentId} | request: ${trace.requestId}`);
   log(`  Tools allowed: ${offered.map((t) => t.name).join(", ")}\n`);
 
-  const messages: Message[] = [{ role: "user", content: task }];
+  const messages: Message[] = [...(opts.history ?? []), { role: "user", content: task }];
   let finalText = "";
   const succeeded = new Set<string>(); // tools that ran without error
   let reminded = false;

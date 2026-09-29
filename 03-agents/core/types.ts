@@ -54,6 +54,7 @@ export interface ParentRef {
   requestId: string; // shared by every trace in one request
   agentId: string;   // who handed the work over
   runId: string;     // the exact run that handed it over
+  sessionId?: string; // set when the work came from a chat session
 }
 
 export interface ToolContext {

@@ -105,6 +105,7 @@ she held the other agents' tools, she would be the god-mode agent by the back do
 | `delegate` | internal-write | Hands a task to one agent on her allowlist |
 | `report_friction` | internal-write | Reports a request she can't route safely, instead of guessing |
 | `ask_human` | read | Asks Will one clarifying question in the terminal |
+| `stand_by` | read | Says, on the record, "there's nothing to do" (a greeting, no task). Traced, no Slack post |
 
 **Coordinator safety rules:**
 
@@ -121,7 +122,8 @@ she held the other agents' tools, she would be the god-mode agent by the back do
 | **Knowledge is not permission** | `agents.json` describes the agents. Who she may hand work to is set only in her policy, in code |
 | **Fails closed** | A malformed `agents.json`, or one naming an agent with no runner, stops Scarlet from starting |
 | **Human in the loop, both ways** | With Will at the keyboard she can ask; with no one there the question is denied and she reports the gap. Max 3 questions; answers never change her permissions |
-| **No silent failure** | If she ends by only talking, she gets one reminder. Then the system files the alert, marks the run `no_action`, and shows a warning |
+| **No silent failure** | If she ends by only talking, she gets one reminder. Then the system files the alert, marks the run `no_action`, and shows a warning. Standing by counts as acting only because it's an explicit, traced decision |
+| **Session memory, hers alone** | In a chat session she remembers the last 20 messages (text only, never raw tool data), so "route it" works. Workers never see it: the contract task is all they get. Wiped on `exit` or after 30 minutes idle, never saved to disk. One session ID joins every trace in the session |
 | **Joined traces** | One request ID runs through Scarlet's trace and the agent's trace. The agent's trace also records which run handed it the work (the same parent/child idea as OpenTelemetry spans) |
 
 **Demo scenarios:**
@@ -132,7 +134,8 @@ she held the other agents' tools, she would be the god-mode agent by the back do
 | `"offboard jane from the directory"` | A fooled model reaches for an agent outside her policy (`agent-jml`), and the runtime blocks it |
 | `"route the new signup"` | No signup id: she reports the gap, then asks Will. With no one at the keyboard the question is denied |
 | `"write me a poem about tacos"` | No agent owns this job: reported, not guessed |
-| `"hello scarlet"` | A model that only chats and never acts: reminder, then a system alert |
+| `"hello scarlet"` | No task: she asks what Will needs. "Nothing" (or no one at the keyboard) ends in `stand_by`, not a report |
+| `"simulate a chatty model"` | A model that only chats and never acts: reminder, then a system alert |
 
 **Where her knowledge lives:** `scarlet/agents.json`, a small definition file
 reviewed in git. It was chosen over `.env` (for secrets, never reviewed), a
@@ -165,6 +168,9 @@ npm run gtm -- --signup harbor-health
 # Scarlet routes a plain-language request to the right agent
 npm run scarlet:mock -- "route the harbor-health signup"
 npm run scarlet -- "route the harbor-health signup"
+
+# Chat session with Scarlet (needs a terminal; type "exit" to leave)
+npm run scarlet
 
 npm run gtm -- --list      # show all signup ids
 npm run test:contract      # handoff contract test

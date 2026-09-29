@@ -1,15 +1,17 @@
 // ============================================================
 // SCARLET'S TOOLS
 // ============================================================
-// Scarlet gets exactly three tools:
+// Scarlet gets exactly four tools:
 //   delegate        hand a task to one allowed agent
 //   report_friction say "I can't route this" instead of guessing
 //   ask_human       ask Will one clarifying question
+//   stand_by        say, on the record, "there is nothing to do"
 // None of them touch data. She routes; the agents do the work.
 // ============================================================
 
 import { makeAskHumanTool } from "../core/ask.ts";
 import { makeFrictionTool } from "../core/friction.ts";
+import { makeStandByTool } from "../core/standby.ts";
 import type { AgentTool } from "../core/types.ts";
 import type { AgentEntry } from "./registry.ts";
 import { scarletPolicy } from "./policy.ts";
@@ -93,6 +95,7 @@ export function makeDelegateTool(registry: AgentEntry[], opts: { mock: boolean }
         requestId: ctx.trace.requestId,
         agentId: ctx.policy.id,
         runId: ctx.trace.runId,
+        sessionId: ctx.trace.sessionId,
       };
       ctx.trace.record("delegation", { toAgent: target.id, task });
       log(`\n↪ Scarlet hands off to ${target.name} [${target.id}]`);
@@ -127,5 +130,5 @@ export function makeDelegateTool(registry: AgentEntry[], opts: { mock: boolean }
 }
 
 export function scarletTools(registry: AgentEntry[], opts: { mock: boolean }): AgentTool[] {
-  return [makeDelegateTool(registry, opts), makeFrictionTool(), makeAskHumanTool()];
+  return [makeDelegateTool(registry, opts), makeFrictionTool(), makeAskHumanTool(), makeStandByTool()];
 }
