@@ -8,7 +8,30 @@
 
 ---
 
-![Zero Trust IaC Network Architecture](../../docs/diagrams/wshc_zero_trust_network_architecture.png)
+```mermaid
+flowchart TB
+    eng["Engineer devices<br/>signed in through Entra ID"]
+
+    subgraph A["Site A · Azure cloud"]
+        vm["tinyco-vm · Ubuntu · tag:server<br/>Tailscale SSH, port 22 closed"]
+    end
+
+    subgraph B["Site B · Home LAN"]
+        direction TB
+        r1["Subnet router 1 · primary<br/>tag:subnet-router"]
+        r2["Subnet router 2 · HA failover<br/>tag:subnet-router"]
+        lan["Devices that can't run Tailscale<br/>modem, access point"]
+    end
+
+    eng -->|"SSH as your identity"| vm
+    eng -->|"reach the home subnet"| r1
+    vm -->|"reach the home subnet"| r1
+    eng -.->|"internet through an exit node, when enabled"| r1
+    r1 --> lan
+    r2 -.->|"takes over if the primary fails"| lan
+```
+
+Every solid arrow is a grant in `acl.tf`; anything not granted is blocked.
 
 ## Overview
 
