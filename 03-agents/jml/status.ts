@@ -63,11 +63,16 @@ export function formatStatus(
     case "applied": {
       const r = outcome.result;
       const done = r.completed.map((s) => `:white_check_mark: ${s}`).join("\n");
+      // Steps already true in the tenant (a rerun, or Entra catching up):
+      // shown in their own section, never as a change, never hidden
+      const already = (r.unchanged ?? []).map((s) => `:heavy_equals_sign: ${s}`).join("\n");
+      const alreadySection = already ? `\n*Already done (no change needed):*\n${already}` : "";
       if (!r.failed) {
         return (
           `${mock}:large_green_circle: ${t.icon} *${t.label} complete:* ${who}\n` +
           `${person({ ...outcome.plan, target: { ...outcome.plan.target, objectId: r.objectId } })}\n` +
-          `*What changed:*\n${done}\n*Approved by:* ${approver()} (terminal)${footer}`
+          `*What changed:*\n${done || "(nothing, everything was already done)"}${alreadySection}\n` +
+          `*Approved by:* ${approver()} (terminal)${footer}`
         );
       }
       const failed = `:x: ${r.failed.step} (${r.failed.error})`;
@@ -75,7 +80,7 @@ export function formatStatus(
       return (
         `${mock}:warning: ${t.icon} *${t.label} only partly done:* ${who}\n` +
         `${person(outcome.plan)}\n` +
-        `*What changed:*\n${done || "(nothing)"}\n${failed}${notDone ? `\n${notDone}` : ""}\n` +
+        `*What changed:*\n${done || "(nothing)"}${alreadySection}\n${failed}${notDone ? `\n${notDone}` : ""}\n` +
         `*Needs a human to finish.* Approved by: ${approver()} (terminal)${footer}`
       );
     }

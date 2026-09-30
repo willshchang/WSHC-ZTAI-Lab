@@ -54,6 +54,7 @@ export function createJmlMock(): ModelClient {
         const r = JSON.parse(applied.output);
         return finish(
           `${eventId}: completed ${r.completed.length} step(s)` +
+            (r.unchanged?.length ? `, ${r.unchanged.length} already done (no change needed)` : "") +
             (r.failed ? `, failed at "${r.failed.step}" (${r.failed.error}), not done: ${r.notDone.length}` : "") +
             ".",
         );

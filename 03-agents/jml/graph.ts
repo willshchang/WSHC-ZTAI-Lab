@@ -38,13 +38,17 @@ export interface TenantConfig {
   };
 }
 
+// Every group write reports what it actually did, so nothing that was
+// "already done" is ever shown as a change (and nothing is silent)
+export type WriteResult = "changed" | "unchanged";
+
 export interface GraphClient {
   label: string;
   getUser(upn: string): Promise<GraphUser | null>;                // User.Read.All
   listMemberIds(groupId: string): Promise<string[]>;              // GroupMember.ReadWrite.All
   createUser(u: { displayName: string; upn: string; password: string }): Promise<{ id: string }>; // User.Create
-  addMember(groupId: string, userId: string): Promise<void>;      // GroupMember.ReadWrite.All
-  removeMember(groupId: string, userId: string): Promise<void>;   // GroupMember.ReadWrite.All
+  addMember(groupId: string, userId: string): Promise<WriteResult>;    // GroupMember.ReadWrite.All
+  removeMember(groupId: string, userId: string): Promise<WriteResult>; // GroupMember.ReadWrite.All
   setAccountEnabled(userId: string, enabled: boolean): Promise<void>; // User.EnableDisableAccount.All
   revokeSessions(userId: string): Promise<void>;                  // User.RevokeSessions.All
 }
@@ -104,16 +108,21 @@ export class MockGraph implements GraphClient {
     this.save();
     return { id };
   }
-  async addMember(groupId: string, userId: string) {
+  async addMember(groupId: string, userId: string): Promise<WriteResult> {
     this.maybeFail("addMember");
     const list = (this.s.memberships[groupId] ??= []);
-    if (!list.includes(userId)) list.push(userId);
+    if (list.includes(userId)) return "unchanged";
+    list.push(userId);
     this.save();
+    return "changed";
   }
-  async removeMember(groupId: string, userId: string) {
+  async removeMember(groupId: string, userId: string): Promise<WriteResult> {
     this.maybeFail("removeMember");
-    this.s.memberships[groupId] = (this.s.memberships[groupId] ?? []).filter((id) => id !== userId);
+    const list = this.s.memberships[groupId] ?? [];
+    if (!list.includes(userId)) return "unchanged";
+    this.s.memberships[groupId] = list.filter((id) => id !== userId);
     this.save();
+    return "changed";
   }
   async setAccountEnabled(userId: string, enabled: boolean) {
     this.maybeFail("setAccountEnabled");
@@ -229,13 +238,13 @@ export class RealGraph implements GraphClient {
     body: unknown,
     what: string,
     alreadyDone?: (status: number, message: string) => boolean,
-  ): Promise<void> {
+  ): Promise<WriteResult> {
     const delays = RealGraph.retryDelaysMs;
     for (let attempt = 0; ; attempt++) {
       const res = await this.call(method, path, body);
-      if (res.ok) return;
+      if (res.ok) return "changed";
       const message = await this.errorMessage(res);
-      if (alreadyDone?.(res.status, message)) return;
+      if (alreadyDone?.(res.status, message)) return "unchanged";
       const retryable = (res.status === 400 || res.status === 404) && NOT_REPLICATED.test(message);
       if (retryable && attempt < delays.length) {
         await new Promise((r) => setTimeout(r, delays[attempt]));
@@ -278,8 +287,8 @@ export class RealGraph implements GraphClient {
     return { id: ((await res.json()) as { id: string }).id };
   }
 
-  async addMember(groupId: string, userId: string) {
-    await this.write(
+  async addMember(groupId: string, userId: string): Promise<WriteResult> {
+    return this.write(
       "POST",
       `/groups/${groupId}/members/$ref`,
       { "@odata.id": `${GRAPH}/directoryObjects/${userId}` },
@@ -288,8 +297,8 @@ export class RealGraph implements GraphClient {
     );
   }
 
-  async removeMember(groupId: string, userId: string) {
-    await this.write(
+  async removeMember(groupId: string, userId: string): Promise<WriteResult> {
+    return this.write(
       "DELETE",
       `/groups/${groupId}/members/${userId}/$ref`,
       undefined,

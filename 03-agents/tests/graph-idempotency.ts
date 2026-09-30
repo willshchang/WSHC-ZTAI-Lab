@@ -4,8 +4,9 @@
 // Entra is eventually consistent, and app-only requests get no
 // read-after-write consistency, so a plan can be built on stale
 // data. These tests prove the real Graph client:
-//   - treats "already a member" as success
-//   - treats "not a member" on removal as success
+//   - treats "already a member" as success, reported "unchanged"
+//   - treats "not a member" on removal as success, reported "unchanged"
+//   - reports a real write as "changed" (so the card never lies)
 //   - retries "not replicated yet" and then succeeds
 //   - still fails loudly on a real error (so nothing is hidden)
 // No network: fetch is replaced by a scripted fake.
@@ -36,10 +37,10 @@ const check = (ok: boolean, msg: string) => {
   console.log(`${ok ? "OK" : "FAIL"}: ${msg}`);
   if (!ok) failures++;
 };
-const run = async (fn: () => Promise<void>) => {
+const run = async (fn: () => Promise<unknown>) => {
   try {
-    await fn();
-    return "ok";
+    const r = await fn();
+    return r === undefined ? "ok" : String(r);
   } catch (e) {
     return String(e);
   }
@@ -48,14 +49,20 @@ const run = async (fn: () => Promise<void>) => {
 const g = new RealGraph();
 
 script = [{ status: 400, message: "One or more added object references already exist for the following modified properties: 'members'." }];
-check((await run(() => g.addMember("grp", "usr"))) === "ok", "adding someone who is already a member counts as success");
+check((await run(() => g.addMember("grp", "usr"))) === "unchanged", "adding someone who is already a member counts as success, reported as no change");
 
 script = [{ status: 404, message: "Resource not found" }];
-check((await run(() => g.removeMember("grp", "usr"))) === "ok", "removing someone who isn't a member counts as success");
+check((await run(() => g.removeMember("grp", "usr"))) === "unchanged", "removing someone who isn't a member counts as success, reported as no change");
+
+script = [{ status: 204 }];
+check((await run(() => g.addMember("grp", "usr"))) === "changed", "a real add is reported as a change");
+
+script = [{ status: 204 }];
+check((await run(() => g.removeMember("grp", "usr"))) === "changed", "a real removal is reported as a change");
 
 script = [{ status: 400, message: "The source resource object or one of the objects being referenced don't exist." }, { status: 204 }];
 calls = 0;
-check((await run(() => g.addMember("grp", "usr"))) === "ok" && calls === 2, "'not replicated yet' is retried, then succeeds");
+check((await run(() => g.addMember("grp", "usr"))) === "changed" && calls === 2, "'not replicated yet' is retried, then succeeds as a change");
 
 script = [{ status: 404, message: "Resource 'usr' does not exist or one of its queried reference-property objects are not present." }, { status: 204 }];
 calls = 0;

@@ -23,7 +23,7 @@
 
 import { randomInt } from "node:crypto";
 import { readFileSync } from "node:fs";
-import type { GraphClient, TenantConfig } from "./graph.ts";
+import type { GraphClient, TenantConfig, WriteResult } from "./graph.ts";
 
 export interface HrEvent {
   id: string;
@@ -158,6 +158,15 @@ export function stepText(s: Step): string {
   }
 }
 
+// What we say when a step was already true (Entra lag or a rerun)
+export function alreadyText(s: Step): string {
+  switch (s.kind) {
+    case "add_to_group": return `Already in group ${s.group} (no change needed)`;
+    case "remove_from_group": return `Already out of group ${s.group} (no change needed)`;
+    default: return `${stepText(s)}: already done (no change needed)`;
+  }
+}
+
 // ------------------------------------------------------------
 // TEMPORARY PASSWORD: random, never printed, traced or returned
 // ------------------------------------------------------------
@@ -179,7 +188,8 @@ function temporaryPassword(): string {
 // reporting exactly what was done and what was not
 // ------------------------------------------------------------
 export interface ApplyResult {
-  completed: string[];
+  completed: string[]; // steps that actually changed something
+  unchanged: string[]; // steps already true in the tenant: no change needed (never silent)
   failed: { step: string; error: string } | null;
   notDone: string[];
   objectId: string | null;
@@ -188,18 +198,20 @@ export interface ApplyResult {
 export async function applyPlan(plan: Plan, graph: GraphClient): Promise<ApplyResult> {
   let userId = plan.target.objectId;
   const completed: string[] = [];
+  const unchanged: string[] = [];
   for (let i = 0; i < plan.steps.length; i++) {
     const step = plan.steps[i]!;
     try {
+      let outcome: WriteResult = "changed";
       switch (step.kind) {
         case "create_user":
           userId = (await graph.createUser({ displayName: step.displayName, upn: step.upn, password: temporaryPassword() })).id;
           break;
         case "add_to_group":
-          await graph.addMember(step.groupId, userId!);
+          outcome = await graph.addMember(step.groupId, userId!);
           break;
         case "remove_from_group":
-          await graph.removeMember(step.groupId, userId!);
+          outcome = await graph.removeMember(step.groupId, userId!);
           break;
         case "disable_account":
           await graph.setAccountEnabled(userId!, false);
@@ -208,15 +220,17 @@ export async function applyPlan(plan: Plan, graph: GraphClient): Promise<ApplyRe
           await graph.revokeSessions(userId!);
           break;
       }
-      completed.push(stepText(step));
+      if (outcome === "unchanged") unchanged.push(alreadyText(step));
+      else completed.push(stepText(step));
     } catch (err) {
       return {
         completed,
+        unchanged,
         failed: { step: stepText(step), error: err instanceof Error ? err.message : String(err) },
         notDone: plan.steps.slice(i + 1).map(stepText),
         objectId: userId,
       };
     }
   }
-  return { completed, failed: null, notDone: [], objectId: userId };
+  return { completed, unchanged, failed: null, notDone: [], objectId: userId };
 }

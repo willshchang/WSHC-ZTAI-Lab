@@ -150,7 +150,7 @@ check(
   const partial: Outcome = {
     kind: "applied",
     plan,
-    result: { completed: ["Step A"], failed: { step: "Step B", error: "403" }, notDone: ["Step C"], objectId: "x" },
+    result: { completed: ["Step A"], unchanged: [], failed: { step: "Step B", error: "403" }, notDone: ["Step C"], objectId: "x" },
   };
   const pc = formatStatus(ev("hr-1001"), partial, { mock: false, runId: "r2" });
   check(
@@ -163,6 +163,41 @@ check(
 
   const staleCard = formatStatus(ev("hr-1003"), { kind: "stale", plan }, { mock: false, runId: "r4" });
   check(/not applied/.test(staleCard) && /changed after the plan was approved/.test(staleCard), "a stale plan card says it was not applied and why");
+
+  // Already-done steps get their own section, never listed as a change
+  const mixed: Outcome = {
+    kind: "applied",
+    plan,
+    result: { completed: ["Remove from group Frontend"], unchanged: ["Already in group Product (no change needed)"], failed: null, notDone: [], objectId: "x" },
+  };
+  const mc = formatStatus(ev("hr-1002"), mixed, { mock: false, runId: "r5" });
+  const changedPart = mc.split("*What changed:*")[1]!.split("*Already done")[0]!;
+  check(
+    (mc.match(/:white_check_mark:/g) ?? []).length === 1 &&
+      /\*Already done \(no change needed\):\*\n:heavy_equals_sign: Already in group Product/.test(mc) &&
+      !changedPart.includes("Product"),
+    "an already-done step is shown in its own section, never under What changed",
+  );
+  const allSame: Outcome = { kind: "applied", plan, result: { completed: [], unchanged: ["Already in group Product (no change needed)"], failed: null, notDone: [], objectId: "x" } };
+  check(/everything was already done/.test(formatStatus(ev("hr-1002"), allSame, { mock: false, runId: "r6" })), "a run where everything was already done says so instead of an empty list");
+}
+
+// ---- Already done is reported, never silent -----------------------
+{
+  // Entra lag: the plan says "add to Product", but by apply time she's already in it
+  const lg = fresh();
+  const j = await buildPlan(ev("hr-1001"), lg, cfg);
+  await applyPlan((j as { ok: true; plan: never }).plan, lg);
+  const move = await buildPlan(ev("hr-1002"), lg, cfg);
+  const maya = await lg.getUser("maya.chen@tinyco.example");
+  await lg.addMember(cfg.groups.teams["Product"]!, maya!.id); // someone (or Entra) got there first
+  const r = await applyPlan((move as { ok: true; plan: never }).plan, lg);
+  check(
+    r.failed === null && r.completed.join() === "Remove from group Frontend" && r.unchanged.join() === "Already in group Product (no change needed)",
+    "a step that was already true is reported as 'already done', not as a change and not silently",
+  );
+  const out = await lg.removeMember(cfg.groups.teams["Frontend"]!, maya!.id);
+  check(out === "unchanged", "removing someone already removed reports no change");
 }
 
 process.exit(failures ? 1 : 0);

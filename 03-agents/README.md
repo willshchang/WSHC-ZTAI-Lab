@@ -243,7 +243,10 @@ right after a write can return old data. On the real run:
 How the agent handles it now: every write is safe to repeat ("already a
 member" and "not a member" count as success), "not replicated yet" errors get
 a short, limited retry as Microsoft's docs recommend, and real errors (like a
-403) are never hidden. **Downsides to design for later:** a human can still be
+403) are never hidden. A step that turns out to be already done is **reported,
+not hidden**: each write returns "changed" or "unchanged", and the #jml-status
+card lists no-op steps in their own "Already done (no change needed)" section,
+never under "What changed". **Downsides to design for later:** a human can still be
 shown a plan built on stale reads (the guard only stops it from running);
 fixed retry waits can still be too short under heavy load; and a second
 process changing the same user at the same time could make plans flip back
