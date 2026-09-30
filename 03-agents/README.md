@@ -34,7 +34,7 @@ Most agent demos give the model one admin key and hope. Here every agent gets:
 |---|---|---|
 | **GTM Signal Router** | Score a new signup from product signals and route it to sales, nurture or self-serve | Built |
 | **Scarlet** (main agent, coordinator) | Read a request and hand it to the one agent whose job it is. Asks Will when a detail is missing. Holds no data tools | Built |
-| JML Agent | Joiner, mover and leaver changes on the identity layer, with human approval for leavers | Planned |
+| **JML Agent** | Joiner, mover and leaver changes on the identity layer. Every tenant change needs human approval | Built |
 
 ---
 
@@ -148,6 +148,128 @@ knowledge that grows over time).
 limits the damage: Scarlet can only choose real agents, her answers must quote
 real results, and every step is traced so anyone can check it.
 
+## JML Agent (Joiner, Mover, Leaver)
+
+Processes one HR event at a time on the identity layer (Entra ID): joiners get an
+account, movers change team, leavers are disabled, have their sessions revoked,
+lose their team groups and land in `JML-Terminated` for audit and legal hold.
+**Every tenant change waits for a human.**
+
+**Tools and risk tiers:**
+
+| Tool | Risk | What it does |
+|---|---|---|
+| `get_hr_event` | read | Reads one event from the HR feed |
+| `plan_hr_change` | read | Plain code builds the exact list of changes, or refuses with a reason |
+| `apply_hr_change` | external-write | Applies the code-built plan after approval. Takes only an event id |
+| `report_friction` | internal-write | Reports a refusal instead of working around it |
+
+**Least-privilege Microsoft Graph permissions** (application, on the
+`wshc-agent-jml` app registration, owned by a named human):
+
+| Permission | Used for |
+|---|---|
+| `User.Read.All` | Find a user by email |
+| `User.Create` | Joiners (not the broader `User.ReadWrite.All`) |
+| `User.EnableDisableAccount.All` | Leavers: disable |
+| `User.RevokeSessions.All` | Leavers: sign out everywhere |
+| `GroupMember.ReadWrite.All` | Team moves, JML-Managed, JML-Terminated |
+
+No delete permission is granted, so users can't be deleted even by mistake.
+Listing a user's groups would need `Directory.Read.All`, so membership is
+checked from the group side instead. Microsoft also requires an admin role to
+disable admins or touch role-assignable groups, which the app never gets.
+
+**Guards (in code, before any plan exists):**
+
+| Guard | What it stops |
+|---|---|
+| Protected accounts | Break-glass and admin group members are never touched |
+| Scope | Only users JML created (members of `JML-Managed`). Terraform-managed users are refused, so the agent never fights the code that is the source of truth |
+| Name clash | A joiner whose username belongs to someone JML doesn't manage is refused, never merged |
+| Unknown team | Refused, never guessed |
+| Idempotent | A finished event plans to "nothing to change" |
+| Reversible | Leavers are disabled, never deleted |
+| No stale plans | Apply re-plans first; if the tenant changed since approval, nothing runs |
+| Model can't write changes | Apply takes an event id only and runs the plan the code built |
+| Stop on first error | Reports exactly what completed, what failed and what wasn't done |
+| Secrets | Temporary passwords are random, never printed, traced or returned |
+
+**`#jml-status` in Slack:** one easy-to-read card per HR event for HR and IT,
+with who, what changed (✅), what was already done and needed no change (🟰),
+what failed (❌) with the reason, what wasn't done, who approved, and the trace ID. Outcomes: complete, partly done, refused,
+already up to date, or not applied. The card is **written by code from the
+executor's actual result, never from the model's summary**, so it can't claim a
+change that didn't happen. Mock-tenant runs are tagged `[MOCK]`. Friction
+reports still go to `#agent-feedback` for builders: two audiences, two
+channels. "Approved by" is the local terminal user for now; a Slack front door
+would record a verified identity.
+
+**The approval box** shows the display name, email and **object ID** (names
+clash in big orgs), every change, and `⚠ HIGH RISK: LEAVER` for offboarding.
+
+**Mock tenant by default.** "Graph" here is Microsoft Graph, the API into Entra
+(not LangGraph). Without `--graph real` the agent runs against a local fake
+tenant, so a missed flag can never touch the real directory. The real tenant
+also needs `jml/tenant.local.json` (group IDs from `terraform output`) and the
+`ENTRA_*` credentials, or it refuses to start.
+
+**Static groups:** the lab's team groups are dynamic (rule-filled), so nothing
+can add members by hand. JML's static groups are defined in
+`01-identity/terraform/jml.tf`, keeping code as the source of truth.
+
+**Demo scenarios:**
+
+| Event | What it shows |
+|---|---|
+| `hr-1001` | Joiner Maya Chen to Frontend |
+| `hr-1002` | Mover Maya to Product |
+| `hr-1003` | Leaver Maya (high risk), then a rerun that changes nothing |
+| `hr-1004` | Leaver for the break-glass account: refused, protected |
+| `hr-1005` | Leaver for a Terraform-managed user: refused, out of scope |
+| `hr-1006` | Joiner to an unknown team: refused |
+| `hr-1007` to `hr-1009` | Leo Park: joiner (Design), mover (Product), leaver |
+| `hr-1010` | Joiner Ava Kim to Backend (a fresh joiner for demos) |
+
+**Eventual consistency (found on the first real run, Sep 29):** Entra is
+eventually consistent, and app-only requests like this agent's get **no
+read-after-write consistency** (only a signed-in user's session does). A read
+right after a write can return old data. On the real run:
+
+| What happened | Why |
+|---|---|
+| The leaver plan still said "remove from Frontend" after the mover had already removed her | The planner read stale memberships: the mover's change hadn't replicated yet |
+| The stale-plan guard fired, nothing ran, Claude re-planned and asked for approval of the fresh plan | Apply re-plans before running and refuses when the plan differs |
+| A rerun of the finished leaver planned 4 changes, the guard fired, and the re-plan said "nothing to change" | Same lag; the guard stopped approval of a plan built on stale reads |
+
+How the agent handles it now: every write is safe to repeat ("already a
+member" and "not a member" count as success), "not replicated yet" errors get
+a short, limited retry as Microsoft's docs recommend, and real errors (like a
+403) are never hidden. A step that turns out to be already done is **reported,
+not hidden**: each write returns "changed" or "unchanged", and the #jml-status
+card lists no-op steps in their own "Already done (no change needed)" section,
+never under "What changed". **Downsides to design for later:** a human can still be
+shown a plan built on stale reads (the guard only stops it from running);
+fixed retry waits can still be too short under heavy load; and a second
+process changing the same user at the same time could make plans flip back
+and forth. Options: wait for replication before planning a follow-up event
+for the same user, confirm each write by reading it back with backoff, or
+process one event per user at a time.
+
+**Next steps (designed):** match people on the HR employee ID instead of the
+name (a new person gets an auto-numbered username like `maya.chen2`; a rehire
+goes to a separate, human-approved reactivation flow); for an unknown team,
+ask whether it's a typo, and if it's a new team, hand it to an access-change
+agent that opens a Terraform PR for the group, so agents propose structure as
+code instead of creating it; when a plan goes stale, rebuild it and ask for a
+fresh approval automatically; and move the lab's users out of Terraform into
+the HR feed, so Terraform owns structure and JML owns people.
+
+**Future design:** split into Joiner, Mover and Leaver agents, each with its own
+app registration and only its own permissions (the Leaver can't create users),
+solved together with secret sprawl so three agents never means three more
+secrets.
+
 ---
 
 ## Quick Start
@@ -163,8 +285,8 @@ npm run gtm:mock -- --signup harbor-health
 
 # Real Claude (needs .env)
 cp .env.example .env
-# add one API key per agent (ANTHROPIC_API_KEY_GTM, ANTHROPIC_API_KEY_SCARLET),
-# optionally the two Slack webhook URLs
+# add one API key per agent (ANTHROPIC_API_KEY_GTM, _SCARLET, _JML),
+# optionally the three Slack webhook URLs (see Slack Setup below)
 npm run gtm -- --signup harbor-health
 
 # Scarlet routes a plain-language request to the right agent
@@ -174,23 +296,55 @@ npm run scarlet -- "route the harbor-health signup"
 # Chat session with Scarlet (needs a terminal; type "exit" to leave)
 npm run scarlet
 
+# JML agent: mock tenant by default, real tenant only with --graph real
+npm run jml -- --list
+npm run jml:mock -- --event hr-1001
+npm run jml -- --event hr-1001 --graph real
+npm run jml -- --reset-mock
+
 npm run gtm -- --list      # show all signup ids
 npm run test:contract      # handoff contract test
 npm run test:policy        # policy blocks a tool that exists but isn't allowed
+npm run test:jml           # JML guards, executor, stale plans, password handling
+npm run test:graph         # real Graph writes are safe to repeat (stubbed network)
+npm run test:mock-tag      # test runs are tagged [MOCK] in Slack, real runs never are
 npm run typecheck          # type-check everything
 ```
 
 Without Slack webhooks, posts are printed as a dry run instead of sent.
 
 > **Mock mode** replaces only the model with a scripted one. Policy checks,
-> human approval, tools, traces and Slack all run for real. The `quickship-labs`
+> human approval, tools, traces and Slack all run for real, and anything a
+> mock run posts to Slack is tagged `[MOCK]`. The `quickship-labs`
 > run plays a fooled model on purpose, to prove the policy layer still blocks it.
 
 **How the tests are tested:** each safety control was deliberately broken
 (allowlist bypassed, default deny disabled, contract loosened, shared-key
 fallback added, and more) to confirm CI fails. A check that can't fail proves
-nothing. This sweep found and fixed four checks that were passing for the wrong
-reason.
+nothing. The sweeps found and fixed checks that were passing for the wrong
+reason, for example a grep that matched a header instead of a real tool call,
+and a password test that searched for the word "password" instead of the real
+value. Every new control since ships with its own sweep (JML guards, safe
+repeats, status cards, already-done reporting, `[MOCK]` tagging).
+
+### Slack Setup
+
+One Slack app (display name **Scarlet**) posts through three incoming
+webhooks. Each webhook is locked to one channel when it's created, so an agent
+can only post where its webhook points.
+
+| Channel | Who reads it | Posted by | `.env` variable |
+|---|---|---|---|
+| `#gtm-routing` | Sales and growth | GTM Signal Router, after a human approves | `SLACK_WEBHOOK_GTM_ROUTING` |
+| `#jml-status` | HR and IT | JML status cards, written by code | `SLACK_WEBHOOK_JML_STATUS` |
+| `#agent-feedback` | Builders | Friction reports and system alerts from every agent | `SLACK_WEBHOOK_AGENT_FEEDBACK` |
+
+To add one: create the channel, then in the app's settings go to **Incoming
+Webhooks → Add New Webhook to Workspace**, pick the channel, authorize, and
+paste the URL into `.env`. Test with `npm run jml:mock -- --event hr-1004`
+(a refusal, so nothing changes): a card should land in `#jml-status` and a
+friction report in `#agent-feedback`, both tagged `[MOCK]`. In production
+`#jml-status` is a private channel, since cards carry names and emails.
 
 ---
 
@@ -202,6 +356,7 @@ reason.
 - Spend is capped by prepaid credit with auto-reload off (the Default workspace can't take a spend limit; a dedicated workspace with its own limit comes with an organization account)
 - Traces are gitignored, since they can contain signup data
 - Customer data is treated as data, never instructions: injected commands are refused and reported
+- **Test runs are labeled:** anything a test run posts to Slack (a scripted model, or JML on the mock tenant) starts with `[MOCK]`: friction reports, system alerts, GTM routing posts and JML cards. Code adds the tag after the model's text, so the model can't drop it, and a real run never carries it
 - **Known gap:** Scarlet and the agents she calls run in one process. Each reads only its own key, but the process could technically read both. Real isolation needs separate processes, and the end state is secretless identity (below)
 
 **Roadmap (production build):**
@@ -209,6 +364,8 @@ reason.
 - **Secretless agent identity:** every agent gets its own identity **and a named human owner**, running under an Entra managed identity on the Azure VM plus workload identity federation, so no static key exists anywhere. This also closes the shared-process gap above
 - **OpenTelemetry traces** for live end-to-end observability (the request ID and parent link already follow the span model)
 - **A fast decision model** (such as Jev) for routing and guardrail checks
+- **Slack front door for Scarlet:** staff chat with her in a channel instead of a terminal (the way identity platforms already run access requests in Slack). Approvals become Approve / Deny buttons that only allowlisted approvers can press, with the approver's Slack identity in the trace; `ask_human` becomes a thread reply; session memory is per thread. Uses Socket Mode (no public URL), and waits for secretless identity so it doesn't add more static tokens
+- **Token and workflow optimizer:** record each model call's token usage in the traces, then plain code totals cost per agent and per step and flags waste (reminder round trips, repeated calls, step-limit hits); a reviewer agent proposes fixes as eval-shaped reports or PRs, never applying them itself. Billing (the admin cost API) says how much; traces say why
 
 **Spend watcher (designed, not built):** tracks API spend per agent key. The
 cost report needs an organization-wide admin key, so the design splits the
@@ -225,7 +382,13 @@ because the admin API isn't available on individual accounts.
 | Claude tool use | https://platform.claude.com/docs/en/agents-and-tools/tool-use/define-tools |
 | Claude models | https://platform.claude.com/docs/en/models/overview |
 | Node.js TypeScript support | https://nodejs.org/api/typescript.html |
-| Slack incoming webhooks | https://api.slack.com/messaging/webhooks |
+| Slack incoming webhooks | https://docs.slack.dev/messaging/sending-messages-using-incoming-webhooks/ |
+| Microsoft Graph: create user (`User.Create`) | https://learn.microsoft.com/en-us/graph/api/user-post-users |
+| Microsoft Graph: update user (`accountEnabled`, admin roles) | https://learn.microsoft.com/en-us/graph/api/user-update |
+| Microsoft Graph: revoke sign-in sessions | https://learn.microsoft.com/en-us/graph/api/user-revokesigninsessions |
+| Microsoft Graph: add group member (role-assignable limits) | https://learn.microsoft.com/en-us/graph/api/group-post-members |
+| Microsoft Entra architecture: replication and consistency | https://learn.microsoft.com/en-us/entra/architecture/architecture |
+| Microsoft Graph: list memberOf (needs `Directory.Read.All`) | https://learn.microsoft.com/en-us/graph/api/user-list-memberof |
 | Claude Usage and Cost API | https://platform.claude.com/docs/en/manage-claude/usage-cost-api |
 | Claude Console workspaces and spend limits | https://platform.claude.com/docs/en/manage-claude/workspaces |
 | LangGraph recursion limit (no-loop design) | https://docs.langchain.com/oss/python/langgraph/errors/GRAPH_RECURSION_LIMIT |

@@ -13,6 +13,7 @@ import { makeAskHumanTool } from "../core/ask.ts";
 import { makeFrictionTool } from "../core/friction.ts";
 import { makeStandByTool } from "../core/standby.ts";
 import type { AgentTool } from "../core/types.ts";
+import type { GraphMode } from "../jml/agent.ts";
 import type { AgentEntry } from "./registry.ts";
 import { scarletPolicy } from "./policy.ts";
 
@@ -28,7 +29,7 @@ const log = (msg: string) => console.log(msg);
 // ------------------------------------------------------------
 let handoffInProgress = false;
 
-export function makeDelegateTool(registry: AgentEntry[], opts: { mock: boolean }): AgentTool {
+export function makeDelegateTool(registry: AgentEntry[], opts: { mock: boolean; graph: GraphMode }): AgentTool {
   // Knowledge (registry) AND permission (policy) must both agree
   const allowed = registry.filter((a) => scarletPolicy.canDelegateTo?.includes(a.id));
 
@@ -102,7 +103,7 @@ export function makeDelegateTool(registry: AgentEntry[], opts: { mock: boolean }
 
       handoffInProgress = true;
       try {
-        const result = await target.run(task, { mock: opts.mock, parent });
+        const result = await target.run(task, { mock: opts.mock, parent, graph: opts.graph });
 
         // ----------------------------------------------------
         // NO MADE-UP RESULTS: print the agent's own words, so
@@ -129,6 +130,6 @@ export function makeDelegateTool(registry: AgentEntry[], opts: { mock: boolean }
   };
 }
 
-export function scarletTools(registry: AgentEntry[], opts: { mock: boolean }): AgentTool[] {
+export function scarletTools(registry: AgentEntry[], opts: { mock: boolean; graph: GraphMode }): AgentTool[] {
   return [makeDelegateTool(registry, opts), makeFrictionTool(), makeAskHumanTool(), makeStandByTool()];
 }

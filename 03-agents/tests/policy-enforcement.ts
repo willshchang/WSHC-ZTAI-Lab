@@ -44,6 +44,7 @@ const result = await runAgent({
   model: fooledModel,
   system: "test",
   task: "Route this new signup. signup_id: quickship-labs",
+  mock: true,
 });
 
 const trace = readFileSync(result.traceFile, "utf8");

@@ -6,3 +6,7 @@ node_modules/
 
 # Agent run traces (may contain signup data)
 traces/
+
+# JML: real tenant group IDs (local only) and mock tenant state
+jml/tenant.local.json
+jml/.mock-state.json

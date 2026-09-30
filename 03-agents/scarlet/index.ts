@@ -5,6 +5,7 @@
 //   npm run scarlet -- "route the harbor-health signup"  one request, then exit
 //   npm run scarlet                                      chat session (needs a terminal)
 //   add :mock to either (npm run scarlet:mock ...) for the scripted model, no API
+//   add --graph real to let the JML agent reach the REAL tenant (mock otherwise)
 // ============================================================
 
 import { randomUUID } from "node:crypto";
@@ -12,6 +13,7 @@ import { createInterface } from "node:readline/promises";
 import { stdin, stdout } from "node:process";
 import { runAgent } from "../core/agent.ts";
 import { createClaudeClient } from "../core/model.ts";
+import type { GraphMode } from "../jml/agent.ts";
 import type { Message, ModelClient } from "../core/types.ts";
 import { createScarletMock } from "./mock.ts";
 import { buildScarletPrompt, scarletPolicy } from "./policy.ts";
@@ -32,7 +34,14 @@ const IDLE_MINUTES = 30;
 
 const args = process.argv.slice(2);
 const mock = args.includes("--mock");
-const request = args.filter((a) => a !== "--mock").join(" ").trim();
+const gi = args.indexOf("--graph");
+const graph: GraphMode = gi >= 0 && args[gi + 1] === "real" ? "real" : "mock";
+// Drop the flags (and --graph's value) so only the request text remains
+const flagIdx = new Set(gi >= 0 ? [gi, gi + 1] : []);
+const request = args
+  .filter((a, i) => a !== "--mock" && !flagIdx.has(i))
+  .join(" ")
+  .trim();
 
 async function handle(
   registry: AgentEntry[],
@@ -42,12 +51,13 @@ async function handle(
 ) {
   const result = await runAgent({
     policy: scarletPolicy,
-    tools: scarletTools(registry, { mock }), // fresh tools per request (question limit resets)
+    tools: scarletTools(registry, { mock, graph }), // fresh tools per request (question limit resets)
     model,
     system: buildScarletPrompt(registry),
     task,
     history: session?.history,
     sessionId: session?.id,
+    mock, // scripted model: posts are tagged [MOCK]
   });
   if (session) {
     // Remember what was said, not raw data: the request and her final reply

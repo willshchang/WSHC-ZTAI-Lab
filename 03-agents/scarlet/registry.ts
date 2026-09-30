@@ -20,13 +20,19 @@ import { readFileSync } from "node:fs";
 import type { RunResult } from "../core/agent.ts";
 import type { ParentRef } from "../core/types.ts";
 import { runGtm } from "../gtm-signal-router/agent.ts";
+import { runJml, type GraphMode } from "../jml/agent.ts";
 
-type Runner = (task: string, opts: { mock: boolean; parent: ParentRef }) => Promise<RunResult>;
+export interface RunnerOpts {
+  mock: boolean;
+  parent: ParentRef;
+  graph: GraphMode; // Microsoft Graph: "mock" unless Will explicitly passes --graph real
+}
+type Runner = (task: string, opts: RunnerOpts) => Promise<RunResult>;
 
 // The only code that knows how to start each agent
 const RUNNERS: Record<string, Runner> = {
   "agent-gtm-signal-router": (task, opts) => runGtm({ task, mock: opts.mock, parent: opts.parent }),
-  // Next: "agent-jml"
+  "agent-jml": (task, opts) => runJml({ task, mock: opts.mock, graph: opts.graph, parent: opts.parent }),
 };
 
 export interface AgentEntry {

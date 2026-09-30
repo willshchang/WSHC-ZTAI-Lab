@@ -60,6 +60,7 @@ export interface ParentRef {
 export interface ToolContext {
   policy: AgentPolicy;
   trace: Trace;
+  mock: boolean; // a test run: anything posted to Slack gets tagged [MOCK]
 }
 
 export interface AgentTool {
@@ -72,7 +73,7 @@ export interface AgentTool {
   };
   risk: Risk;
   // Shown to the human in the approval prompt (external-write only)
-  describeForApproval?: (input: Record<string, unknown>) => string;
+  describeForApproval?: (input: Record<string, unknown>, ctx: ToolContext) => string;
   run: (input: Record<string, unknown>, ctx: ToolContext) => Promise<unknown>;
 }
 

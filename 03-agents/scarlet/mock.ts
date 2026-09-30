@@ -5,7 +5,7 @@
 // Everything else (policy checks, the handoff, the GTM agent,
 // approval, traces, Slack, ask_human) runs for real. Scenarios:
 //   1. clear request with a signup id  -> hand off to GTM
-//   2. identity request (offboarding)  -> simulated fooled model
+//   2. payroll request ("run payroll")  -> simulated fooled model
 //      tries an agent NOT in the policy; the runtime blocks it
 //   3. signup request with no id       -> friction, then ask_human
 //      (denied with no one at the keyboard; answered at a terminal)
@@ -18,6 +18,9 @@
 //      the signup, still hands off the exact contract task
 //   8. a question ("what can you do about pixel-pine?") -> offer
 //      first; act only on a yes; no one there -> stand_by
+//   9. a command naming an HR event ("process hr-1001") -> JML Agent
+//  10. an identity request with no event id ("offboard maya") ->
+//      friction, then ask which HR event
 // ============================================================
 
 import type { Block, Message, ModelClient, ModelTurn } from "../core/types.ts";
@@ -61,6 +64,8 @@ const friction = (category: string, request: string, actual: string, evidence: s
 });
 
 const findSignup = (text: string) => signups.find((s) => text.includes(s.id));
+const findHrEvent = (text: string) => /\bhr-\d{4}\b/i.exec(text)?.[0]?.toLowerCase();
+const jmlTask = (id: string) => `Process HR event. event_id: ${id}`;
 
 export function createScarletMock(): ModelClient {
   return {
@@ -118,6 +123,23 @@ export function createScarletMock(): ModelClient {
 
       // Scenario 8: a QUESTION about a signup -> offer first, act only on a yes
       const isQuestion = /\?\s*$|^\s*(what|how|can you|could you|should)\b/i.test(request);
+      const hrAsked = findHrEvent(request);
+      if (isQuestion && hrAsked) {
+        if (!asked) {
+          return toolUse(
+            "ask_human",
+            { question: `I can hand ${hrAsked} to the JML Agent. It plans the identity changes and waits for your approval before touching the tenant. Want me to?` },
+            "That's a question, so I'll offer before acting.",
+          );
+        }
+        const answer = failed(asked) ? "" : String(JSON.parse(asked.output).answer ?? "");
+        if (/\b(yes|yep|sure|go|do it|please)\b/i.test(answer)) {
+          return toolUse("delegate", { agent: "agent-jml", task: jmlTask(hrAsked) }, `On it. Handing ${hrAsked} to the JML Agent.`);
+        }
+        return toolUse("stand_by",
+          { reason: failed(asked) ? "Question not confirmed: no one at the keyboard" : "Will declined the offer" },
+          "Okay, I won't start anything.");
+      }
       const mentioned = findSignup(request);
       if (isQuestion && mentioned) {
         if (!asked) {
@@ -162,18 +184,42 @@ export function createScarletMock(): ModelClient {
           return toolUse(
             "report_friction",
             friction("unclear_instruction", request,
-              "The request needs an identity (JML) agent, and none is in my policy", handoff.output),
+              "The request needs a payroll agent, and none is in my policy", handoff.output),
             "That handoff was blocked by policy. Reporting instead of guessing.",
           );
         }
         return finish("I couldn't route this request safely, so I reported it to #agent-feedback.");
       }
-      if (/\b(offboard|onboard|new hire|leaver|joiner|disable|jml)\b/i.test(request)) {
+      if (/\bpayroll\b/i.test(request)) {
         return toolUse(
           "delegate",
-          { agent: "agent-jml", task: request },
-          "[simulated fooled model] This looks like an identity job, so I'll hand it to a JML agent.",
+          { agent: "agent-payroll", task: request },
+          "[simulated fooled model] This looks like a payroll job, so I'll hand it to a payroll agent.",
         );
+      }
+
+      // Scenario 9: a command naming an HR event -> the JML Agent
+      const hrEvent = findHrEvent(request);
+      if (hrEvent) {
+        return toolUse("delegate", { agent: "agent-jml", task: jmlTask(hrEvent) },
+          `This is HR event ${hrEvent}. Handing it to the JML Agent.`);
+      }
+
+      // Scenario 10: an identity request with no event id -> report, then ask
+      if (/\b(offboard|onboard|new hire|leaver|joiner|disable)\b/i.test(request)) {
+        if (!reported) {
+          return toolUse("report_friction",
+            friction("missing_data", request, "An identity request with no HR event id", "No hr-#### id in the request"),
+            "This belongs to the JML Agent, but there is no HR event id. Recording the gap first.");
+        }
+        if (!asked) {
+          return toolUse("ask_human", { question: "Which HR event is this? (e.g. hr-1003)" }, "Asking Will for the event id.");
+        }
+        const answered = failed(asked) ? undefined : findHrEvent(String(JSON.parse(asked.output).answer ?? ""));
+        if (answered) {
+          return toolUse("delegate", { agent: "agent-jml", task: jmlTask(answered) }, `Thanks. Handing ${answered} to the JML Agent.`);
+        }
+        return finish("I don't have an HR event id, so I stopped. The gap is reported in #agent-feedback.");
       }
 
       // Scenario 1: clear request with a known signup id
@@ -219,7 +265,7 @@ export function createScarletMock(): ModelClient {
         return toolUse(
           "report_friction",
           friction("unclear_instruction", request, "No agent in my policy handles this kind of request",
-            "Allowed agents: agent-gtm-signal-router"),
+            "Allowed agents: agent-gtm-signal-router, agent-jml"),
           "No agent I can hand this to owns this job. Reporting instead of guessing.",
         );
       }

@@ -1,0 +1,22 @@
+{
+  "_about": "A fake copy of the tenant for mock mode. Nothing here touches Entra. State changes during mock runs are saved to .mock-state.json (gitignored); reset with --reset-mock.",
+  "domain": "tinyco.example",
+  "groups": {
+    "teams": {
+      "ITOps": "mock-grp-itops", "SRE": "mock-grp-sre", "Security": "mock-grp-security",
+      "Backend": "mock-grp-backend", "Frontend": "mock-grp-frontend", "Design": "mock-grp-design",
+      "Product": "mock-grp-product", "PeopleOps": "mock-grp-peopleops", "Legal": "mock-grp-legal"
+    },
+    "managed": "mock-grp-jml-managed",
+    "terminated": "mock-grp-jml-terminated",
+    "protected": ["mock-grp-breakglass", "mock-grp-itops-admins"]
+  },
+  "users": [
+    { "id": "mock-user-breakglass", "upn": "admin.test@tinyco.example", "displayName": "Break-glass Admin", "accountEnabled": true },
+    { "id": "mock-user-jamie", "upn": "jamie.taylor@tinyco.example", "displayName": "Jamie Taylor", "accountEnabled": true }
+  ],
+  "memberships": {
+    "mock-grp-breakglass": ["mock-user-breakglass"],
+    "mock-grp-legal": ["mock-user-jamie"]
+  }
+}
