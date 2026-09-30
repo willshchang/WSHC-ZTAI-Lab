@@ -228,6 +228,8 @@ can add members by hand. JML's static groups are defined in
 | `hr-1004` | Leaver for the break-glass account: refused, protected |
 | `hr-1005` | Leaver for a Terraform-managed user: refused, out of scope |
 | `hr-1006` | Joiner to an unknown team: refused |
+| `hr-1007` to `hr-1009` | Leo Park: joiner (Design), mover (Product), leaver |
+| `hr-1010` | Joiner Ava Kim to Backend (a fresh joiner for demos) |
 
 **Eventual consistency (found on the first real run, Sep 29):** Entra is
 eventually consistent, and app-only requests like this agent's get **no

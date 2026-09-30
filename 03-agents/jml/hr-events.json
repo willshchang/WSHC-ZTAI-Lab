@@ -72,6 +72,15 @@
       "username": "leo.park",
       "displayName": "Leo Park",
       "effective": "2026-12-18"
+    },
+    {
+      "id": "hr-1010",
+      "type": "joiner",
+      "username": "ava.kim",
+      "displayName": "Ava Kim",
+      "team": "Backend",
+      "title": "Backend Engineer",
+      "effective": "2026-10-13"
     }
   ]
 }
