@@ -23,6 +23,8 @@ HR CSV export
     → Terraform
       → Entra ID: users, groups, roles, MFA, SSO, SCIM      (Layer 1: Identity, Accessibility)
         → Tailscale: ACL policy, tags, SSH, subnet routing  (Layer 2: Network, Reachability)
+          → AI agents: scoped identity, least privilege,    (Layer 3: Agents)
+            human approval and a trace on every action
 ```
 
 Every user, group, role, app assignment and network rule comes from
@@ -34,8 +36,9 @@ code. Nothing is clicked into existence by hand.
 
 | Layer | Status |
 |---|---|
-| **Layer 1: Identity (Accessibility)** | Deployed and validated on a live Microsoft Entra ID tenant during the Microsoft 365 E5 trial (late spring 2026). The trial has since ended. All Terraform code and deployment documentation are retained. |
+| **Layer 1: Identity (Accessibility)** | Fully deployed and validated during the Microsoft 365 E5 trial (late spring 2026). The tenant is still live on Entra ID Free, which runs users, static groups, app registrations and the JML agent. Dynamic groups, Conditional Access and PIM need a paid tier (P1/P2), so those stay in code and docs until a license is back. |
 | **Layer 2: Network (Reachability)** | Live. Tailnet, Azure VM and both subnet routers are running and managed by Terraform. |
+| **Layer 3: AI agents** | Live. Scarlet (coordinator), the GTM Signal Router and the JML agent, each with its own key and tools. JML has run joiners, movers and leavers on the real tenant. CI breaks every safety control on purpose to prove the tests catch it. |
 
 > **Note:** Layer 1 was originally deployed to the tenant
 > `TinyCoDDG.onmicrosoft.com`. The docs use `<tenant>.onmicrosoft.com`
@@ -50,7 +53,8 @@ network. Every request has to prove who is asking and whether they are
 allowed, every time.
 
 This lab enforces that with two independent layers. A user has to pass
-**both** before reaching anything. Each layer is named by the property it
+**both** before reaching anything. A third layer applies the same rules to
+AI agents. Each layer is named by the property it
 controls:
 
 - **Accessibility:** who can access what (identity, roles, apps)
@@ -60,9 +64,48 @@ controls:
 |---|---|---|
 | **1. Identity: Accessibility** | Who are you, and what are you allowed to access? | Microsoft Entra ID |
 | **2. Network: Reachability** | Which machines can you actually reach, and how? | Tailscale |
+| **3. AI agents** | What is each agent, and what may it touch? | TypeScript agents on Claude |
 | **Cross-cutting: IaC and Automation** | How is all of this built, changed and checked? | Terraform, Bash, GitHub Actions |
 
-![Zero Trust Network Architecture](./docs/diagrams/wshc_zero_trust_network_architecture.png)
+```mermaid
+%%{init: {"flowchart": {"htmlLabels": false}}}%%
+flowchart TB
+    person(("A person"))
+
+    subgraph L1["Layer 1 · Identity (Entra ID)"]
+        direction LR
+        sso["SSO, MFA, RBAC<br/>app assignments"]
+        users["Users and groups<br/>from the HR export"]
+    end
+
+    subgraph L2["Layer 2 · Network (Tailscale)"]
+        direction LR
+        acl{"ACL policy<br/>default deny"}
+        devices["Tagged machines<br/>VM, subnet routers"]
+    end
+
+    subgraph L3["Layer 3 · AI agents"]
+        direction LR
+        scarlet["Scarlet<br/>coordinator"]
+        gtm["GTM Signal Router"]
+        jml["JML Agent"]
+    end
+
+    person -->|"signs in"| sso
+    sso -->|"Tailscale login"| acl
+    acl -->|"only what's granted"| devices
+    scarlet -->|"contract"| gtm
+    scarlet -->|"contract"| jml
+    jml -->|"Microsoft Graph<br/>human approval"| users
+```
+
+A person passes identity, then the network policy, before reaching any
+machine. The agents act on the identity layer only through Microsoft Graph
+with five least-privilege permissions and a human approval. Terraform and
+GitHub Actions build and check every layer as code: Terraform owns the
+structure (groups, apps, ACL), the JML agent owns people. Network detail is in
+[02-network](./02-network/README.md); agent detail is in
+[03-agents](./03-agents/README.md).
 
 ### Layer 1: Identity, Accessibility (Entra ID)
 

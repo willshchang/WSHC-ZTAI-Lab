@@ -40,24 +40,30 @@ Most agent demos give the model one admin key and hope. Here every agent gets:
 
 ## How an Agent Runs
 
+Every tool call passes three checks, and no run ends without acting.
+
+```mermaid
+%%{init: {"flowchart": {"htmlLabels": false}}}%%
+flowchart TD
+    task["Task arrives<br/>from Will, Scarlet, CI"] --> model["Model reasons<br/>act first: a tool call<br/>is forced until it acts"]
+    model -->|"done"| acted{"Acted?"}
+    acted -->|"yes"| finish["Finish<br/>summary, run ends"]
+    acted -->|"no"| remind["Nothing done yet<br/>one reminder, then<br/>a system alert"]
+    remind -->|"try again"| model
+    model -->|"tool request"| policy{"In its policy?"}
+    policy -->|"no"| refused["Refused<br/>traced, model told no"]
+    policy -->|"yes"| risk{"Risk tier?"}
+    risk -->|"read / internal-write"| run["Run the tool<br/>result to the trace"]
+    risk -->|"external-write"| human{"Human<br/>approves?"}
+    human -->|"yes"| run
+    human -->|"no"| denied["Not approved<br/>traced, told to stop"]
+    run -->|"result back<br/>to the model"| model
 ```
-task ─▶ model reasons ─▶ asks for a tool
-                              │
-              ┌───────────────┴───────────────┐
-              ▼                               ▼
-     in the agent's policy?            not in the policy
-              │                        → denied + traced
-              ▼
-     risk tier?
-       read / internal-write  → runs, result traced
-       external-write         → human approves? ─ no → denied + traced
-                                      │ yes
-                                      ▼
-                                 runs, result traced
-              │
-              ▼
-     result goes back to the model ─▶ repeat until done (step limit)
-```
+
+Every step is written to the trace, stamped with the agent ID. Hitting the
+step limit files a system alert, never a silent stop. Act first applies only
+to agents that opt in (Scarlet) and only on models that accept a forced tool
+call.
 
 The engine lives in `core/`. A new agent only supplies its own tools, policy
 and instructions.
@@ -97,6 +103,26 @@ number.
 Scarlet is the main agent Will works alongside. She knows the map and routes
 each request to the one agent whose job it is. She holds no data tools of her own. **A coordinator routes, it never holds:** if
 she held the other agents' tools, she would be the god-mode agent by the back door.
+
+```mermaid
+%%{init: {"flowchart": {"htmlLabels": false}}}%%
+flowchart TD
+    msg["Will's message"] --> scarlet["Scarlet (coordinator)<br/>no data tools"]
+    scarlet -->|"small talk"| chat["chat<br/>refused if it names<br/>an id or action word"]
+    scarlet -->|"question or<br/>missing detail"| ask["ask_human<br/>offer first, or ask"]
+    scarlet -->|"a gap, or<br/>nothing to do"| report["report_friction<br/>or stand_by"]
+    scarlet -->|"command"| delegate["delegate<br/>exact task format"]
+    delegate --> contract{"Matches the<br/>contract?"}
+    contract -->|"no"| rejected["Rejected<br/>before any agent starts"]
+    contract -->|"yes"| gtm["GTM Signal Router<br/>own key, tools,<br/>approval"]
+    contract -->|"yes"| jml["JML Agent<br/>own key, tools,<br/>approval"]
+    gtm -.->|"result, as data"| scarlet
+    jml -.->|"result, as data"| scarlet
+```
+
+She picks one way to handle each message, and work only reaches an agent
+through its contract. Each worker then runs the loop above with its own key,
+tools and approval gate.
 
 **Tools and risk tiers:**
 
