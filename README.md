@@ -68,34 +68,35 @@ controls:
 | **Cross-cutting: IaC and Automation** | How is all of this built, changed and checked? | Terraform, Bash, GitHub Actions |
 
 ```mermaid
+%%{init: {"flowchart": {"htmlLabels": false}}}%%
 flowchart TB
     person(("A person"))
 
-    subgraph L1["Layer 1 · Identity: Accessibility · Microsoft Entra ID"]
+    subgraph L1["Layer 1 · Identity (Entra ID)"]
         direction LR
         sso["SSO, MFA, RBAC<br/>app assignments"]
         users["Users and groups<br/>from the HR export"]
     end
 
-    subgraph L2["Layer 2 · Network: Reachability · Tailscale"]
+    subgraph L2["Layer 2 · Network (Tailscale)"]
         direction LR
         acl{"ACL policy<br/>default deny"}
-        devices["Tagged machines<br/>Azure VM, subnet routers"]
+        devices["Tagged machines<br/>VM, subnet routers"]
     end
 
-    subgraph L3["Layer 3 · AI agents · 03-agents"]
+    subgraph L3["Layer 3 · AI agents"]
         direction LR
-        scarlet["Scarlet<br/>coordinator, no data tools"]
+        scarlet["Scarlet<br/>coordinator"]
         gtm["GTM Signal Router"]
         jml["JML Agent"]
     end
 
     person -->|"signs in"| sso
-    sso -->|"Tailscale login through Entra"| acl
+    sso -->|"Tailscale login"| acl
     acl -->|"only what's granted"| devices
     scarlet -->|"contract"| gtm
     scarlet -->|"contract"| jml
-    jml -->|"Microsoft Graph · 5 permissions · human approval"| users
+    jml -->|"Microsoft Graph<br/>human approval"| users
 ```
 
 A person passes identity, then the network policy, before reaching any

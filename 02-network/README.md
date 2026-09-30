@@ -42,29 +42,30 @@ running and managed by the code in this folder.
 ## Architecture
 
 ```mermaid
+%%{init: {"flowchart": {"htmlLabels": false}}}%%
 flowchart TB
-    eng["Engineer devices<br/>signed in through Entra ID"]
+    eng["Engineer devices<br/>signed in via Entra ID"]
 
     subgraph A["Site A · Azure cloud"]
-        vm["tinyco-vm · Ubuntu · tag:server<br/>Tailscale SSH, port 22 closed"]
+        vm["tinyco-vm (Ubuntu)<br/>tag:server<br/>Tailscale SSH only"]
     end
 
     subgraph B["Site B · Home LAN"]
         direction TB
-        r1["Subnet router 1 · primary<br/>tag:subnet-router"]
-        r2["Subnet router 2 · HA failover<br/>tag:subnet-router"]
-        lan["Devices that can't run Tailscale<br/>modem, access point"]
+        r1["Subnet router 1<br/>primary<br/>tag:subnet-router"]
+        r2["Subnet router 2<br/>HA failover<br/>tag:subnet-router"]
+        lan["Non-Tailscale devices<br/>modem, access point"]
     end
 
     eng -->|"SSH as your identity"| vm
-    eng -->|"reach the home subnet"| r1
-    vm -->|"reach the home subnet"| r1
-    eng -.->|"internet through an exit node, when enabled"| r1
+    eng -->|"home subnet"| r1
+    vm -->|"home subnet"| r1
+    eng -.->|"exit node, when on"| r1
     r1 --> lan
-    r2 -.->|"takes over if the primary fails"| lan
+    r2 -.->|"takes over on failure"| lan
 ```
 
-Every solid arrow is a grant in `acl.tf`; anything not granted is blocked.
+Each labelled solid arrow is a grant in `acl.tf`; anything not granted is blocked.
 Terraform manages the ACL, device tags, route approvals and auth keys for both
 sites.
 
