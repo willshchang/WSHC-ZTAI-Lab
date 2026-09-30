@@ -60,7 +60,7 @@ flowchart TD
     run -->|"result back<br/>to the model"| model
 ```
 
-Every step is written to the trace, stamped with the agent ID. Hitting the
+Every step is written to the trace, stamped with the agent ID ([sample traces and how to investigate with them](./examples/sample-traces/README.md)). Hitting the
 step limit files a system alert, never a silent stop. Act first applies only
 to agents that opt in (Scarlet) and only on models that accept a forced tool
 call.
