@@ -196,8 +196,8 @@ disable admins or touch role-assignable groups, which the app never gets.
 | Secrets | Temporary passwords are random, never printed, traced or returned |
 
 **`#jml-status` in Slack:** one easy-to-read card per HR event for HR and IT,
-with who, what changed (✅), what failed (❌) with the reason, what wasn't done,
-who approved, and the trace ID. Outcomes: complete, partly done, refused,
+with who, what changed (✅), what was already done and needed no change (🟰),
+what failed (❌) with the reason, what wasn't done, who approved, and the trace ID. Outcomes: complete, partly done, refused,
 already up to date, or not applied. The card is **written by code from the
 executor's actual result, never from the model's summary**, so it can't claim a
 change that didn't happen. Mock-tenant runs are tagged `[MOCK]`. Friction
@@ -285,8 +285,8 @@ npm run gtm:mock -- --signup harbor-health
 
 # Real Claude (needs .env)
 cp .env.example .env
-# add one API key per agent (ANTHROPIC_API_KEY_GTM, ANTHROPIC_API_KEY_SCARLET),
-# optionally the two Slack webhook URLs
+# add one API key per agent (ANTHROPIC_API_KEY_GTM, _SCARLET, _JML),
+# optionally the three Slack webhook URLs (see Slack Setup below)
 npm run gtm -- --signup harbor-health
 
 # Scarlet routes a plain-language request to the right agent
@@ -307,20 +307,44 @@ npm run test:contract      # handoff contract test
 npm run test:policy        # policy blocks a tool that exists but isn't allowed
 npm run test:jml           # JML guards, executor, stale plans, password handling
 npm run test:graph         # real Graph writes are safe to repeat (stubbed network)
+npm run test:mock-tag      # test runs are tagged [MOCK] in Slack, real runs never are
 npm run typecheck          # type-check everything
 ```
 
 Without Slack webhooks, posts are printed as a dry run instead of sent.
 
 > **Mock mode** replaces only the model with a scripted one. Policy checks,
-> human approval, tools, traces and Slack all run for real. The `quickship-labs`
+> human approval, tools, traces and Slack all run for real, and anything a
+> mock run posts to Slack is tagged `[MOCK]`. The `quickship-labs`
 > run plays a fooled model on purpose, to prove the policy layer still blocks it.
 
 **How the tests are tested:** each safety control was deliberately broken
 (allowlist bypassed, default deny disabled, contract loosened, shared-key
 fallback added, and more) to confirm CI fails. A check that can't fail proves
-nothing. This sweep found and fixed four checks that were passing for the wrong
-reason.
+nothing. The sweeps found and fixed checks that were passing for the wrong
+reason, for example a grep that matched a header instead of a real tool call,
+and a password test that searched for the word "password" instead of the real
+value. Every new control since ships with its own sweep (JML guards, safe
+repeats, status cards, already-done reporting, `[MOCK]` tagging).
+
+### Slack Setup
+
+One Slack app (display name **Scarlet**) posts through three incoming
+webhooks. Each webhook is locked to one channel when it's created, so an agent
+can only post where its webhook points.
+
+| Channel | Who reads it | Posted by | `.env` variable |
+|---|---|---|---|
+| `#gtm-routing` | Sales and growth | GTM Signal Router, after a human approves | `SLACK_WEBHOOK_GTM_ROUTING` |
+| `#jml-status` | HR and IT | JML status cards, written by code | `SLACK_WEBHOOK_JML_STATUS` |
+| `#agent-feedback` | Builders | Friction reports and system alerts from every agent | `SLACK_WEBHOOK_AGENT_FEEDBACK` |
+
+To add one: create the channel, then in the app's settings go to **Incoming
+Webhooks → Add New Webhook to Workspace**, pick the channel, authorize, and
+paste the URL into `.env`. Test with `npm run jml:mock -- --event hr-1004`
+(a refusal, so nothing changes): a card should land in `#jml-status` and a
+friction report in `#agent-feedback`, both tagged `[MOCK]`. In production
+`#jml-status` is a private channel, since cards carry names and emails.
 
 ---
 
@@ -358,7 +382,7 @@ because the admin API isn't available on individual accounts.
 | Claude tool use | https://platform.claude.com/docs/en/agents-and-tools/tool-use/define-tools |
 | Claude models | https://platform.claude.com/docs/en/models/overview |
 | Node.js TypeScript support | https://nodejs.org/api/typescript.html |
-| Slack incoming webhooks | https://api.slack.com/messaging/webhooks |
+| Slack incoming webhooks | https://docs.slack.dev/messaging/sending-messages-using-incoming-webhooks/ |
 | Microsoft Graph: create user (`User.Create`) | https://learn.microsoft.com/en-us/graph/api/user-post-users |
 | Microsoft Graph: update user (`accountEnabled`, admin roles) | https://learn.microsoft.com/en-us/graph/api/user-update |
 | Microsoft Graph: revoke sign-in sessions | https://learn.microsoft.com/en-us/graph/api/user-revokesigninsessions |
