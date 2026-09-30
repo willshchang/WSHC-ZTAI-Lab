@@ -19,6 +19,11 @@ import { jmlTools } from "./tools.ts";
 
 export type GraphMode = "mock" | "real";
 
+// A scripted model OR the mock tenant makes this a test run, so its
+// friction reports are tagged [MOCK]. The status card follows the
+// tenant only: a real-tenant change is real, whoever drove it.
+export const isTestRun = (mockModel: boolean, graph: GraphMode | undefined) => mockModel || graph !== "real";
+
 export async function runJml(opts: {
   task: string;
   mock: boolean;
@@ -40,6 +45,7 @@ export async function runJml(opts: {
     system: jmlSystemPrompt,
     task: opts.task,
     parent: opts.parent,
+    mock: isTestRun(opts.mock, opts.graph),
   });
 
   // ----------------------------------------------------------

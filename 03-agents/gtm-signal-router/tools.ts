@@ -7,7 +7,7 @@
 // ============================================================
 
 import { makeFrictionTool } from "../core/friction.ts";
-import { postToSlack } from "../core/slack.ts";
+import { MOCK_TAG, postToSlack } from "../core/slack.ts";
 import type { AgentTool } from "../core/types.ts";
 import { findSignup, scoreAccount } from "./scoring.ts";
 
@@ -97,6 +97,10 @@ const draftRoutingMessage: AgentTool = {
 // post_to_slack (external-write): real people act on this post,
 // so the core loop pauses for human approval before it runs
 // ------------------------------------------------------------
+// Code adds the tag, not the model, so a test post can't drop it
+const routingText = (input: Record<string, unknown>, mock: boolean) =>
+  (mock ? MOCK_TAG : "") + String(input.message);
+
 const postRouting: AgentTool = {
   name: "post_to_slack",
   description: "Post an approved routing message to the #gtm-routing channel. A human must approve first.",
@@ -106,9 +110,10 @@ const postRouting: AgentTool = {
     required: ["message"],
   },
   risk: "external-write",
-  describeForApproval: (input) => `Post to #gtm-routing:\n\n${String(input.message)}`,
-  run: async (input) =>
-    postToSlack(process.env.SLACK_WEBHOOK_GTM_ROUTING, "#gtm-routing", String(input.message)),
+  // The approval box shows exactly what will post, tag included
+  describeForApproval: (input, ctx) => `Post to #gtm-routing:\n\n${routingText(input, ctx.mock)}`,
+  run: async (input, ctx) =>
+    postToSlack(process.env.SLACK_WEBHOOK_GTM_ROUTING, "#gtm-routing", routingText(input, ctx.mock)),
 };
 
 export const gtmTools: AgentTool[] = [

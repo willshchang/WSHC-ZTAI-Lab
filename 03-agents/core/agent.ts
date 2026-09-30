@@ -19,6 +19,7 @@ import type {
   ModelClient,
   ParentRef,
   ToolResultBlock,
+  ToolContext,
 } from "./types.ts";
 
 export interface RunOptions {
@@ -28,6 +29,9 @@ export interface RunOptions {
   system: string;
   task: string;
   parent?: ParentRef; // set when a coordinator handed this work over
+  // Required, so every caller has to decide: a test run (scripted model
+  // or mock tenant) tags everything it posts to Slack as [MOCK]
+  mock: boolean;
   // SESSION MEMORY (main agents only): earlier messages from the same
   // chat session, text only. Never passed on to other agents.
   history?: Message[];
@@ -68,7 +72,7 @@ function preview(input: Record<string, unknown>): string {
 }
 
 export async function runAgent(opts: RunOptions): Promise<RunResult> {
-  const { policy, model, system, task, parent } = opts;
+  const { policy, model, system, task, parent, mock } = opts;
   const sessionId = opts.sessionId ?? parent?.sessionId;
   const trace = new Trace(policy.id, parent?.requestId, sessionId);
 
@@ -137,7 +141,7 @@ export async function runAgent(opts: RunOptions): Promise<RunResult> {
         continue;
       }
       if (!acted) {
-        await raiseSilentFailure(policy, trace, task, "no_action",
+        await raiseSilentFailure(policy, trace, mock, task, "no_action",
           `Ended twice without calling any of: ${required.join(", ")}`, finalText);
         return result(step, "no_action");
       }
@@ -150,7 +154,7 @@ export async function runAgent(opts: RunOptions): Promise<RunResult> {
     const results: ToolResultBlock[] = [];
     for (const call of toolCalls) {
       if (call.type !== "tool_use") continue;
-      const r = await handleToolCall(call, byName, policy, trace);
+      const r = await handleToolCall(call, byName, { policy, trace, mock });
       if (!r.is_error) succeeded.add(call.name);
       results.push(r);
     }
@@ -161,7 +165,7 @@ export async function runAgent(opts: RunOptions): Promise<RunResult> {
   // STEP LIMIT: a confused agent stops instead of looping forever,
   // and the stop is reported, never silent
   // ----------------------------------------------------------
-  await raiseSilentFailure(policy, trace, task, "max_steps_reached",
+  await raiseSilentFailure(policy, trace, mock, task, "max_steps_reached",
     `Reached the ${policy.maxSteps}-step limit before finishing`, finalText);
   return result(policy.maxSteps, "max_steps_reached");
 }
@@ -173,6 +177,7 @@ export async function runAgent(opts: RunOptions): Promise<RunResult> {
 async function raiseSilentFailure(
   policy: AgentPolicy,
   trace: Trace,
+  mock: boolean,
   task: string,
   outcome: "no_action" | "max_steps_reached",
   actual: string,
@@ -190,6 +195,7 @@ async function raiseSilentFailure(
     policy,
     trace.runId,
     "system",
+    mock,
   );
   trace.record("system_alert", { outcome, actual, ...report });
   trace.record("run_end", { outcome });
@@ -199,9 +205,9 @@ async function raiseSilentFailure(
 async function handleToolCall(
   call: { id: string; name: string; input: Record<string, unknown> },
   byName: Map<string, AgentTool>,
-  policy: AgentPolicy,
-  trace: Trace,
+  ctx: ToolContext,
 ): Promise<ToolResultBlock> {
+  const { policy, trace } = ctx;
   const tool = byName.get(call.name);
 
   // ----------------------------------------------------------
@@ -227,7 +233,7 @@ async function handleToolCall(
   // ----------------------------------------------------------
   if (tool.risk === "external-write") {
     const details = tool.describeForApproval
-      ? tool.describeForApproval(call.input)
+      ? tool.describeForApproval(call.input, ctx)
       : JSON.stringify(call.input, null, 2);
     const approval = await requestApproval(`${policy.name} wants to run ${tool.name}`, details);
     trace.record("approval", { tool: tool.name, ...approval });
@@ -248,7 +254,7 @@ async function handleToolCall(
   }
 
   try {
-    const output = await tool.run(call.input, { policy, trace });
+    const output = await tool.run(call.input, ctx);
     trace.record("tool_result", { tool: tool.name, output });
     return { type: "tool_result", tool_use_id: call.id, content: JSON.stringify(output) };
   } catch (err) {

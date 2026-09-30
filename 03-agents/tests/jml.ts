@@ -102,7 +102,7 @@ check(
   const tools = jmlTools(tg, cfg);
   const planTool = tools.find((x) => x.name === "plan_hr_change")!;
   const applyTool = tools.find((x) => x.name === "apply_hr_change")!;
-  const ctx = { policy: jmlPolicy, trace: new Trace("agent-jml") };
+  const ctx = { policy: jmlPolicy, trace: new Trace("agent-jml"), mock: true };
   await planTool.run({ event_id: "hr-1003" }, ctx); // leaver plan approved by a human
   const maya = (await tg.getUser("maya.chen@tinyco.example"))!;
   await tg.addMember(cfg.groups.teams.Legal!, maya.id); // the tenant changes underneath
@@ -130,7 +130,7 @@ check(
   const sg = fresh();
   const outcomes = new Map<string, Outcome>();
   const tools = jmlTools(sg, cfg, (id, o) => outcomes.set(id, o));
-  const ctx = { policy: jmlPolicy, trace: new Trace("agent-jml") };
+  const ctx = { policy: jmlPolicy, trace: new Trace("agent-jml"), mock: true };
   let pw = "";
   const orig = sg.createUser.bind(sg);
   sg.createUser = async (u) => { pw = u.password; return orig(u); };

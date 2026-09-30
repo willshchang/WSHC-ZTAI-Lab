@@ -57,6 +57,7 @@ async function handle(
     task,
     history: session?.history,
     sessionId: session?.id,
+    mock, // scripted model: posts are tagged [MOCK]
   });
   if (session) {
     // Remember what was said, not raw data: the request and her final reply

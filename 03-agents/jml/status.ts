@@ -17,7 +17,7 @@
 // ============================================================
 
 import { userInfo } from "node:os";
-import { postToSlack, type SlackResult } from "../core/slack.ts";
+import { MOCK_TAG, postToSlack, type SlackResult } from "../core/slack.ts";
 import type { ApplyResult, HrEvent, Plan } from "./planner.ts";
 
 export type Outcome =
@@ -51,7 +51,7 @@ export function formatStatus(
 ): string {
   const t = TYPE[event.type];
   const who = `*${event.displayName}*`;
-  const mock = ctx.mock ? ":test_tube: *[MOCK]* " : "";
+  const mock = ctx.mock ? MOCK_TAG : "";
   const team = event.team ? `  |  *Team:* ${event.team}` : "";
   const when = event.effective ? `  |  *Effective:* ${event.effective}` : "";
   const footer = `\n*HR event:* ${event.id}  |  *Trace:* \`${ctx.runId}\``;

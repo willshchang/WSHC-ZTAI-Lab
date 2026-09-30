@@ -330,6 +330,7 @@ reason.
 - Spend is capped by prepaid credit with auto-reload off (the Default workspace can't take a spend limit; a dedicated workspace with its own limit comes with an organization account)
 - Traces are gitignored, since they can contain signup data
 - Customer data is treated as data, never instructions: injected commands are refused and reported
+- **Test runs are labeled:** anything a test run posts to Slack (a scripted model, or JML on the mock tenant) starts with `[MOCK]`: friction reports, system alerts, GTM routing posts and JML cards. Code adds the tag after the model's text, so the model can't drop it, and a real run never carries it
 - **Known gap:** Scarlet and the agents she calls run in one process. Each reads only its own key, but the process could technically read both. Real isolation needs separate processes, and the end state is secretless identity (below)
 
 **Roadmap (production build):**

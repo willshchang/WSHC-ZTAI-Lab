@@ -18,6 +18,7 @@
     "test:policy": "node tests/policy-enforcement.ts",
     "test:jml": "node tests/jml.ts",
     "test:graph": "node tests/graph-idempotency.ts",
+    "test:mock-tag": "node tests/mock-tag.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

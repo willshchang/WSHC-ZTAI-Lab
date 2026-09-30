@@ -16,7 +16,7 @@
 // channel, so it runs without approval, but it is always traced.
 // ============================================================
 
-import { postToSlack } from "./slack.ts";
+import { MOCK_TAG, postToSlack } from "./slack.ts";
 import type { AgentPolicy, AgentTool } from "./types.ts";
 
 export interface FrictionFields {
@@ -32,9 +32,11 @@ export async function fileFrictionReport(
   fields: FrictionFields,
   policy: AgentPolicy,
   runId: string,
-  filedBy: "agent" | "system" = "agent",
+  filedBy: "agent" | "system",
+  mock: boolean,
 ) {
   const text =
+    (mock ? MOCK_TAG : "") +
     `:warning: *Agent friction report* (${fields.category})` +
     (filedBy === "system" ? " :rotating_light: *filed by the system*" : "") +
     `\n*Agent:* ${policy.name} (\`${policy.id}\`)\n` +
@@ -76,6 +78,6 @@ export function makeFrictionTool(): AgentTool {
     },
     risk: "internal-write",
     run: async (input, ctx) =>
-      fileFrictionReport(input as unknown as FrictionFields, ctx.policy, ctx.trace.runId, "agent"),
+      fileFrictionReport(input as unknown as FrictionFields, ctx.policy, ctx.trace.runId, "agent", ctx.mock),
   };
 }

@@ -6,6 +6,10 @@
 // failing. Safe for demos and for anyone cloning the repo.
 // ============================================================
 
+// Anything a test run posts carries this tag, so a scripted or
+// mock-tenant post can never be mistaken for a real one in Slack
+export const MOCK_TAG = ":test_tube: *[MOCK]* ";
+
 export interface SlackResult {
   posted: boolean;
   dryRun: boolean;

@@ -153,6 +153,16 @@ jobs:
       - name: "JML: real Graph writes are safe to repeat (eventual consistency)"
         run: npm run -s test:graph < /dev/null
 
+      - name: "Test runs are tagged [MOCK] in Slack, real runs never are"
+        run: |
+          npm run -s test:mock-tag < /dev/null
+          out=$(npm run -s gtm:mock -- --signup quickship-labs < /dev/null)
+          grep -q 'Would post to #agent-feedback:' <<< "$out" || { echo "FAIL: no friction report"; exit 1; }
+          grep -q ':test_tube: \*\[MOCK\]\* :warning: \*Agent friction report' <<< "$out" || { echo "FAIL: GTM mock friction report not tagged"; exit 1; }
+          out=$(npm run -s jml:mock -- --event hr-1004 < /dev/null)
+          grep -q ':test_tube: \*\[MOCK\]\* :warning: \*Agent friction report' <<< "$out" || { echo "FAIL: JML mock friction report not tagged"; exit 1; }
+          echo "OK: every test-run post is tagged"
+
       - name: "JML: a joiner waits for a human; with no one there nothing is created"
         run: |
           out=$(npm run -s jml:mock -- --event hr-1001 < /dev/null)

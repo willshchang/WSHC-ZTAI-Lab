@@ -28,5 +28,6 @@ export async function runGtm(opts: {
     system: gtmSystemPrompt,
     task: opts.task,
     parent: opts.parent,
+    mock: opts.mock, // scripted model: posts are tagged [MOCK]
   });
 }
