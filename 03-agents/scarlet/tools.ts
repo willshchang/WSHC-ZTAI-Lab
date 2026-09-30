@@ -130,6 +130,65 @@ export function makeDelegateTool(registry: AgentEntry[], opts: { mock: boolean; 
   };
 }
 
-export function scarletTools(registry: AgentEntry[], opts: { mock: boolean; graph: GraphMode }): AgentTool[] {
-  return [makeDelegateTool(registry, opts), makeFrictionTool(), makeAskHumanTool(), makeStandByTool()];
+// ------------------------------------------------------------
+// CHAT: small talk, on the record
+// ------------------------------------------------------------
+// Lets Scarlet answer a greeting like a person ("Good morning,
+// Will!") while still ending on a recorded decision, so the
+// no-silent-failure guard is satisfied without a reminder.
+//
+// THE RISK: a tool that counts as acting could be used to chat past
+// a real request ("sure, on it!") and do nothing. THE BACKSTOP, in
+// code: chat checks Will's actual message against every agent's
+// requestPattern (its ids and action words). If anything matches,
+// chat refuses, the refusal doesn't count as acting, and she must
+// delegate, offer, or ask. False positives fail safe: she asks
+// instead of chatting.
+//
+// Risk tier: read. It prints to the terminal and changes nothing.
+// ------------------------------------------------------------
+export function makeChatTool(registry: AgentEntry[], message: string): AgentTool {
+  return {
+    name: "chat",
+    description:
+      "Reply to small talk (a greeting, thanks, how are you) in a warm, brief sentence or two. " +
+      "ONLY when the message has no request or question about work. It refuses any message that " +
+      "names something an agent could act on; then handle the message as a request instead.",
+    inputSchema: {
+      type: "object",
+      properties: { message: { type: "string", description: "Your reply to Will" } },
+      required: ["message"],
+    },
+    risk: "read",
+    printsOwnLine: true, // her reply shows as a 💭 line; the trace keeps the call
+    run: async (input, ctx) => {
+      for (const agent of registry) {
+        const hit = agent.requestPattern.exec(message);
+        if (hit) {
+          ctx.trace.record("chat_refused", { matched: hit[0], agent: agent.id });
+          throw new Error(
+            `"${hit[0]}" looks like a request for the ${agent.name}, so this isn't small talk. ` +
+              `Handle it as a request: delegate a command, offer on a question, or ask if a detail is missing.`,
+          );
+        }
+      }
+      const text = String(input.message ?? "").trim();
+      ctx.trace.record("chat", { message: text });
+      console.log(`💭 ${text}`);
+      return { replied: true };
+    },
+  };
+}
+
+export function scarletTools(
+  registry: AgentEntry[],
+  opts: { mock: boolean; graph: GraphMode; message: string },
+): AgentTool[] {
+  return [
+    makeDelegateTool(registry, opts),
+    makeFrictionTool(),
+    makeAskHumanTool(),
+    makeStandByTool(),
+    makeChatTool(registry, opts.message),
+  ];
 }

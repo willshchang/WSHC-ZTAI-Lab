@@ -51,7 +51,7 @@ async function handle(
 ) {
   const result = await runAgent({
     policy: scarletPolicy,
-    tools: scarletTools(registry, { mock, graph }), // fresh tools per request (question limit resets)
+    tools: scarletTools(registry, { mock, graph, message: task }), // fresh tools per request (question limit resets)
     model,
     system: buildScarletPrompt(registry),
     task,

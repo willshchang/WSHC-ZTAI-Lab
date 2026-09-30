@@ -236,7 +236,7 @@ async function handleToolCall(
     };
   }
 
-  log(`🔧 ${tool.name} (${tool.risk}) ${preview(call.input)}`);
+  if (!tool.printsOwnLine) log(`🔧 ${tool.name} (${tool.risk}) ${preview(call.input)}`);
   trace.record("tool_call", { tool: tool.name, risk: tool.risk, input: call.input });
 
   // ----------------------------------------------------------

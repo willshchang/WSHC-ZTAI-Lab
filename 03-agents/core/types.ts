@@ -76,6 +76,9 @@ export interface AgentTool {
     required?: string[];
   };
   risk: Risk;
+  // The tool prints its own user-facing line (chat), so the loop skips
+  // its 🔧 console line. The trace still records every call in full.
+  printsOwnLine?: boolean;
   // Shown to the human in the approval prompt (external-write only)
   describeForApproval?: (input: Record<string, unknown>, ctx: ToolContext) => string;
   run: (input: Record<string, unknown>, ctx: ToolContext) => Promise<unknown>;
