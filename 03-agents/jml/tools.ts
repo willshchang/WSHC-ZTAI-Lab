@@ -16,8 +16,15 @@ import { makeFrictionTool } from "../core/friction.ts";
 import type { AgentTool } from "../core/types.ts";
 import type { GraphClient, TenantConfig } from "./graph.ts";
 import { applyPlan, buildPlan, describePlan, loadHrEvents, type Plan } from "./planner.ts";
+import type { Outcome } from "./status.ts";
 
-export function jmlTools(graph: GraphClient, cfg: TenantConfig): AgentTool[] {
+// record: called with the latest outcome for each event, so the
+// #jml-status card is built from what actually happened
+export function jmlTools(
+  graph: GraphClient,
+  cfg: TenantConfig,
+  record: (eventId: string, outcome: Outcome) => void = () => {},
+): AgentTool[] {
   const events = loadHrEvents();
   const planned = new Map<string, Plan>(); // plans the code built in this run
   const findEvent = (id: unknown) => events.find((e) => e.id === String(id ?? ""));
@@ -53,9 +60,16 @@ export function jmlTools(graph: GraphClient, cfg: TenantConfig): AgentTool[] {
       const e = findEvent(input.event_id);
       if (!e) throw new Error(`No HR event "${input.event_id}"`);
       const result = await buildPlan(e, graph, cfg);
-      if (!result.ok) return { refused: true, category: result.category, reason: result.reason };
+      if (!result.ok) {
+        record(e.id, { kind: "refused", reason: result.reason });
+        return { refused: true, category: result.category, reason: result.reason };
+      }
       planned.set(e.id, result.plan);
-      if (result.plan.steps.length === 0) return { nothing_to_change: true, target: result.plan.target };
+      if (result.plan.steps.length === 0) {
+        record(e.id, { kind: "nothing", plan: result.plan });
+        return { nothing_to_change: true, target: result.plan.target };
+      }
+      record(e.id, { kind: "planned", plan: result.plan });
       return { plan: describePlan(result.plan), steps: result.plan.steps.length };
     },
   };
@@ -87,10 +101,12 @@ export function jmlTools(graph: GraphClient, cfg: TenantConfig): AgentTool[] {
       const fresh = await buildPlan(e, graph, cfg);
       if (!fresh.ok || JSON.stringify(fresh.plan.steps) !== JSON.stringify(approved.steps)) {
         ctx.trace.record("stale_plan", { eventId: id });
+        record(id, { kind: "stale", plan: approved });
         throw new Error("The tenant changed since the plan was approved. Nothing was applied. Plan again.");
       }
 
       const result = await applyPlan(approved, graph);
+      record(id, { kind: "applied", plan: approved, result });
       ctx.trace.record("jml_applied", { eventId: id, ...result }); // never contains the password
       planned.delete(id);
       return result;

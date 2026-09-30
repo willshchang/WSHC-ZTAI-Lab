@@ -13,6 +13,8 @@ import type { ParentRef } from "../core/types.ts";
 import { loadMockConfig, loadRealConfig, MockGraph, RealGraph } from "./graph.ts";
 import { createJmlMock } from "./mock.ts";
 import { jmlPolicy, jmlSystemPrompt } from "./policy.ts";
+import { loadHrEvents } from "./planner.ts";
+import { postStatus, type Outcome } from "./status.ts";
 import { jmlTools } from "./tools.ts";
 
 export type GraphMode = "mock" | "real";
@@ -29,12 +31,31 @@ export async function runJml(opts: {
   const graph = real ? new RealGraph() : new MockGraph();
   console.log(`\n🏢 JML tenant: ${graph.label}`);
 
-  return runAgent({
+  // The latest outcome per event, recorded by the tools as it happens
+  const outcomes = new Map<string, Outcome>();
+  const result = await runAgent({
     policy: jmlPolicy,
-    tools: jmlTools(graph, cfg),
+    tools: jmlTools(graph, cfg, (id, o) => outcomes.set(id, o)),
     model: opts.mock ? createJmlMock() : createClaudeClient(jmlPolicy),
     system: jmlSystemPrompt,
     task: opts.task,
     parent: opts.parent,
   });
+
+  // ----------------------------------------------------------
+  // #jml-status: one card per event, written by CODE from the
+  // final recorded outcome (never the model's summary)
+  // ----------------------------------------------------------
+  const events = loadHrEvents();
+  for (const [id, outcome] of outcomes) {
+    const event = events.find((e) => e.id === id);
+    if (!event) continue;
+    try {
+      await postStatus(event, outcome, { mock: !real, runId: result.runId });
+    } catch (err) {
+      // A failed status post never hides the change itself; it's in the trace
+      console.error(`❗ Could not post to #jml-status: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+  return result;
 }

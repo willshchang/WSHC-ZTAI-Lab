@@ -195,6 +195,16 @@ disable admins or touch role-assignable groups, which the app never gets.
 | Stop on first error | Reports exactly what completed, what failed and what wasn't done |
 | Secrets | Temporary passwords are random, never printed, traced or returned |
 
+**`#jml-status` in Slack:** one easy-to-read card per HR event for HR and IT,
+with who, what changed (✅), what failed (❌) with the reason, what wasn't done,
+who approved, and the trace ID. Outcomes: complete, partly done, refused,
+already up to date, or not applied. The card is **written by code from the
+executor's actual result, never from the model's summary**, so it can't claim a
+change that didn't happen. Mock-tenant runs are tagged `[MOCK]`. Friction
+reports still go to `#agent-feedback` for builders: two audiences, two
+channels. "Approved by" is the local terminal user for now; a Slack front door
+would record a verified identity.
+
 **The approval box** shows the display name, email and **object ID** (names
 clash in big orgs), every change, and `⚠ HIGH RISK: LEAVER` for offboarding.
 

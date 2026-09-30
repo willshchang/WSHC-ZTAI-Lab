@@ -173,6 +173,16 @@ jobs:
           done
           echo "OK: protected and out-of-scope accounts refused"
 
+      - name: "JML: #jml-status cards are posted from the real outcome"
+        run: |
+          out=$(npm run -s jml:mock -- --event hr-1004 < /dev/null)
+          grep -q "Would post to #jml-status" <<< "$out" || { echo "FAIL: no status card"; exit 1; }
+          grep -q "Leaver refused" <<< "$out" || { echo "FAIL: refusal not on the card"; exit 1; }
+          grep -q "\[MOCK\]" <<< "$out" || { echo "FAIL: mock card not tagged"; exit 1; }
+          out=$(npm run -s jml:mock -- --event hr-1001 < /dev/null)
+          grep -q "Joiner not applied" <<< "$out" || { echo "FAIL: unapproved joiner not reported as not applied"; exit 1; }
+          echo "OK: status cards match what happened"
+
       - name: "JML: the real tenant is refused without its config and credentials"
         run: |
           out=$(npm run -s jml:mock -- --event hr-1001 --graph real < /dev/null 2>&1 || true)

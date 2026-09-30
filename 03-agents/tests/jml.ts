@@ -12,6 +12,7 @@ import { applyPlan, buildPlan, loadHrEvents, type HrEvent } from "../jml/planner
 import { jmlPolicy } from "../jml/policy.ts";
 import { jmlTools } from "../jml/tools.ts";
 import { Trace } from "../core/trace.ts";
+import { formatStatus, type Outcome } from "../jml/status.ts";
 
 const cfg = loadMockConfig();
 const fixture = JSON.parse(readFileSync(new URL("../jml/mock-tenant.json", import.meta.url), "utf8"));
@@ -121,6 +122,47 @@ check(
     noPlan = /No plan was built/.test(String(err));
   }
   check(noPlan, "apply refuses an event that was never planned");
+}
+
+// ---- #jml-status cards tell the truth ---------------------------
+{
+  // Run a joiner through the real tools, recording outcomes like runJml does
+  const sg = fresh();
+  const outcomes = new Map<string, Outcome>();
+  const tools = jmlTools(sg, cfg, (id, o) => outcomes.set(id, o));
+  const ctx = { policy: jmlPolicy, trace: new Trace("agent-jml") };
+  let pw = "";
+  const orig = sg.createUser.bind(sg);
+  sg.createUser = async (u) => { pw = u.password; return orig(u); };
+  await tools.find((x) => x.name === "plan_hr_change")!.run({ event_id: "hr-1001" }, ctx);
+  check(outcomes.get("hr-1001")?.kind === "planned", "a planned but unapplied event is recorded as planned (card: not applied)");
+  await tools.find((x) => x.name === "apply_hr_change")!.run({ event_id: "hr-1001" }, ctx);
+  const applied = outcomes.get("hr-1001")!;
+  check(applied.kind === "applied", "an applied event is recorded as applied");
+  const card = formatStatus(ev("hr-1001"), applied, { mock: false, runId: "r1" });
+  check(/Joiner complete/.test(card) && (card.match(/:white_check_mark:/g) ?? []).length === 3, "applied card lists exactly the 3 completed changes");
+  check(pw.length > 0 && !card.includes(pw), "the card never contains the password");
+  check(!card.includes("[MOCK]"), "a real-tenant card has no MOCK tag");
+  check(formatStatus(ev("hr-1001"), applied, { mock: true, runId: "r1" }).includes("[MOCK]"), "a mock-tenant card is tagged MOCK");
+
+  // A partial result: completed, failed and not-done steps are all shown honestly
+  const plan = (applied as Extract<Outcome, { kind: "applied" }>).plan;
+  const partial: Outcome = {
+    kind: "applied",
+    plan,
+    result: { completed: ["Step A"], failed: { step: "Step B", error: "403" }, notDone: ["Step C"], objectId: "x" },
+  };
+  const pc = formatStatus(ev("hr-1001"), partial, { mock: false, runId: "r2" });
+  check(
+    /only partly done/.test(pc) && (pc.match(/:white_check_mark:/g) ?? []).length === 1 && /:x: Step B \(403\)/.test(pc) && /Step C \(not done\)/.test(pc),
+    "a partial card shows 1 done, the failure with its reason, and what was not done (never as done)",
+  );
+
+  const refusedCard = formatStatus(ev("hr-1004"), { kind: "refused", reason: "protected account" }, { mock: false, runId: "r3" });
+  check(/refused/.test(refusedCard) && /protected account/.test(refusedCard) && /Nothing was changed/.test(refusedCard), "a refused card states the reason and that nothing changed");
+
+  const staleCard = formatStatus(ev("hr-1003"), { kind: "stale", plan }, { mock: false, runId: "r4" });
+  check(/not applied/.test(staleCard) && /changed after the plan was approved/.test(staleCard), "a stale plan card says it was not applied and why");
 }
 
 process.exit(failures ? 1 : 0);
