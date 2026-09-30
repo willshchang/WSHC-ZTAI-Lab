@@ -292,6 +292,8 @@ reason.
 - **Secretless agent identity:** every agent gets its own identity **and a named human owner**, running under an Entra managed identity on the Azure VM plus workload identity federation, so no static key exists anywhere. This also closes the shared-process gap above
 - **OpenTelemetry traces** for live end-to-end observability (the request ID and parent link already follow the span model)
 - **A fast decision model** (such as Jev) for routing and guardrail checks
+- **Slack front door for Scarlet:** staff chat with her in a channel instead of a terminal (the way identity platforms already run access requests in Slack). Approvals become Approve / Deny buttons that only allowlisted approvers can press, with the approver's Slack identity in the trace; `ask_human` becomes a thread reply; session memory is per thread. Uses Socket Mode (no public URL), and waits for secretless identity so it doesn't add more static tokens
+- **Token and workflow optimizer:** record each model call's token usage in the traces, then plain code totals cost per agent and per step and flags waste (reminder round trips, repeated calls, step-limit hits); a reviewer agent proposes fixes as eval-shaped reports or PRs, never applying them itself. Billing (the admin cost API) says how much; traces say why
 
 **Spend watcher (designed, not built):** tracks API spend per agent key. The
 cost report needs an organization-wide admin key, so the design splits the
