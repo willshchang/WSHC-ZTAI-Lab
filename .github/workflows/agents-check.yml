@@ -150,6 +150,9 @@ jobs:
       - name: "JML: guards and executor (planner tests)"
         run: npm run -s test:jml < /dev/null
 
+      - name: "JML: real Graph writes are safe to repeat (eventual consistency)"
+        run: npm run -s test:graph < /dev/null
+
       - name: "JML: a joiner waits for a human; with no one there nothing is created"
         run: |
           out=$(npm run -s jml:mock -- --event hr-1001 < /dev/null)

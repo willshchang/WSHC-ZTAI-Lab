@@ -17,6 +17,7 @@
     "test:contract": "node tests/scarlet-contract.ts",
     "test:policy": "node tests/policy-enforcement.ts",
     "test:jml": "node tests/jml.ts",
+    "test:graph": "node tests/graph-idempotency.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

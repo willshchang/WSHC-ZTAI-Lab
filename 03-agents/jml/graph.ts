@@ -150,8 +150,26 @@ export function loadRealConfig(): TenantConfig {
   return c;
 }
 
+// ------------------------------------------------------------
+// EVENTUAL CONSISTENCY (found on the first real run, Sep 29)
+// ------------------------------------------------------------
+// Entra is eventually consistent, and app-only requests (like
+// this agent's) get NO read-after-write consistency: a read right
+// after a write can return old data. So every write here is made
+// safe to repeat:
+//   - adding someone who is already a member counts as success
+//   - removing someone who isn't a member counts as success
+//   - "object doesn't exist yet" (not replicated) is retried
+//     briefly, as Microsoft's docs recommend
+// The planner's stale-plan check is the other half: a plan built
+// on stale reads is never run without a fresh approval.
+// ------------------------------------------------------------
+const NOT_REPLICATED = /(does not|doesn't|don't|do not) exist/i;
+const ALREADY_MEMBER = /already exist/i;
+
 export class RealGraph implements GraphClient {
   label = "REAL tenant (Microsoft Graph)";
+  static retryDelaysMs = [2000, 5000]; // tests set these to 0
   private token?: { value: string; expires: number };
   private tenantId = process.env.ENTRA_TENANT_ID;
   private clientId = process.env.ENTRA_CLIENT_ID;
@@ -190,14 +208,41 @@ export class RealGraph implements GraphClient {
     return res;
   }
 
-  private async fail(res: Response, what: string): Promise<never> {
-    let detail = "";
+  private async errorMessage(res: Response): Promise<string> {
     try {
-      detail = ((await res.json()) as { error?: { message?: string } }).error?.message ?? "";
+      return ((await res.json()) as { error?: { message?: string } }).error?.message ?? "";
     } catch {
-      /* no body */
+      return ""; // no body
     }
+  }
+
+  private async fail(res: Response, what: string): Promise<never> {
+    const detail = await this.errorMessage(res);
     throw new Error(`${what} failed (${res.status})${detail ? `: ${detail}` : ""}`);
+  }
+
+  // A write that is safe to repeat: "already done" counts as success,
+  // and "not replicated yet" is retried after a short wait
+  private async write(
+    method: string,
+    path: string,
+    body: unknown,
+    what: string,
+    alreadyDone?: (status: number, message: string) => boolean,
+  ): Promise<void> {
+    const delays = RealGraph.retryDelaysMs;
+    for (let attempt = 0; ; attempt++) {
+      const res = await this.call(method, path, body);
+      if (res.ok) return;
+      const message = await this.errorMessage(res);
+      if (alreadyDone?.(res.status, message)) return;
+      const retryable = (res.status === 400 || res.status === 404) && NOT_REPLICATED.test(message);
+      if (retryable && attempt < delays.length) {
+        await new Promise((r) => setTimeout(r, delays[attempt]));
+        continue;
+      }
+      throw new Error(`${what} failed (${res.status})${message ? `: ${message}` : ""}`);
+    }
   }
 
   async getUser(upn: string) {
@@ -234,24 +279,33 @@ export class RealGraph implements GraphClient {
   }
 
   async addMember(groupId: string, userId: string) {
-    const res = await this.call("POST", `/groups/${groupId}/members/$ref`, {
-      "@odata.id": `${GRAPH}/directoryObjects/${userId}`,
-    });
-    if (!res.ok) return this.fail(res, "Adding to the group");
+    await this.write(
+      "POST",
+      `/groups/${groupId}/members/$ref`,
+      { "@odata.id": `${GRAPH}/directoryObjects/${userId}` },
+      "Adding to the group",
+      (status, message) => status === 400 && ALREADY_MEMBER.test(message), // already a member
+    );
   }
 
   async removeMember(groupId: string, userId: string) {
-    const res = await this.call("DELETE", `/groups/${groupId}/members/${userId}/$ref`);
-    if (!res.ok && res.status !== 404) return this.fail(res, "Removing from the group");
+    await this.write(
+      "DELETE",
+      `/groups/${groupId}/members/${userId}/$ref`,
+      undefined,
+      "Removing from the group",
+      (status) => status === 404, // not a member any more
+    );
   }
 
+  // Setting the same value twice, or revoking twice, is already harmless;
+  // these only need the "not replicated yet" retry
   async setAccountEnabled(userId: string, enabled: boolean) {
-    const res = await this.call("PATCH", `/users/${userId}`, { accountEnabled: enabled });
-    if (!res.ok) return this.fail(res, enabled ? "Enabling the account" : "Disabling the account");
+    await this.write("PATCH", `/users/${userId}`, { accountEnabled: enabled },
+      enabled ? "Enabling the account" : "Disabling the account");
   }
 
   async revokeSessions(userId: string) {
-    const res = await this.call("POST", `/users/${userId}/revokeSignInSessions`);
-    if (!res.ok) return this.fail(res, "Revoking sign-in sessions");
+    await this.write("POST", `/users/${userId}/revokeSignInSessions`, undefined, "Revoking sign-in sessions");
   }
 }

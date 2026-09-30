@@ -219,6 +219,28 @@ can add members by hand. JML's static groups are defined in
 | `hr-1005` | Leaver for a Terraform-managed user: refused, out of scope |
 | `hr-1006` | Joiner to an unknown team: refused |
 
+**Eventual consistency (found on the first real run, Sep 29):** Entra is
+eventually consistent, and app-only requests like this agent's get **no
+read-after-write consistency** (only a signed-in user's session does). A read
+right after a write can return old data. On the real run:
+
+| What happened | Why |
+|---|---|
+| The leaver plan still said "remove from Frontend" after the mover had already removed her | The planner read stale memberships: the mover's change hadn't replicated yet |
+| The stale-plan guard fired, nothing ran, Claude re-planned and asked for approval of the fresh plan | Apply re-plans before running and refuses when the plan differs |
+| A rerun of the finished leaver planned 4 changes, the guard fired, and the re-plan said "nothing to change" | Same lag; the guard stopped approval of a plan built on stale reads |
+
+How the agent handles it now: every write is safe to repeat ("already a
+member" and "not a member" count as success), "not replicated yet" errors get
+a short, limited retry as Microsoft's docs recommend, and real errors (like a
+403) are never hidden. **Downsides to design for later:** a human can still be
+shown a plan built on stale reads (the guard only stops it from running);
+fixed retry waits can still be too short under heavy load; and a second
+process changing the same user at the same time could make plans flip back
+and forth. Options: wait for replication before planning a follow-up event
+for the same user, confirm each write by reading it back with backoff, or
+process one event per user at a time.
+
 **Next steps (designed):** match people on the HR employee ID instead of the
 name (a new person gets an auto-numbered username like `maya.chen2`; a rehire
 goes to a separate, human-approved reactivation flow); for an unknown team,
@@ -269,6 +291,7 @@ npm run gtm -- --list      # show all signup ids
 npm run test:contract      # handoff contract test
 npm run test:policy        # policy blocks a tool that exists but isn't allowed
 npm run test:jml           # JML guards, executor, stale plans, password handling
+npm run test:graph         # real Graph writes are safe to repeat (stubbed network)
 npm run typecheck          # type-check everything
 ```
 
@@ -324,6 +347,7 @@ because the admin API isn't available on individual accounts.
 | Microsoft Graph: update user (`accountEnabled`, admin roles) | https://learn.microsoft.com/en-us/graph/api/user-update |
 | Microsoft Graph: revoke sign-in sessions | https://learn.microsoft.com/en-us/graph/api/user-revokesigninsessions |
 | Microsoft Graph: add group member (role-assignable limits) | https://learn.microsoft.com/en-us/graph/api/group-post-members |
+| Microsoft Entra architecture: replication and consistency | https://learn.microsoft.com/en-us/entra/architecture/architecture |
 | Microsoft Graph: list memberOf (needs `Directory.Read.All`) | https://learn.microsoft.com/en-us/graph/api/user-list-memberof |
 | Claude Usage and Cost API | https://platform.claude.com/docs/en/manage-claude/usage-cost-api |
 | Claude Console workspaces and spend limits | https://platform.claude.com/docs/en/manage-claude/workspaces |
