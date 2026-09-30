@@ -23,6 +23,9 @@ export const scarletPolicy: AgentPolicy = {
   // No silent failure: she must hand off, report, or stand by on the
   // record before she ends. Plain talk alone never counts.
   requiredActions: ["delegate", "report_friction", "stand_by"],
+  // Act first: a greeting goes straight to ask_human instead of a text
+  // reply. Code enforces it where the model allows; the guard backs it up.
+  actFirst: true,
   maxSteps: 6, // routing is short; a small limit stops token burn
   apiKeyEnv: "ANTHROPIC_API_KEY_SCARLET",
 };

@@ -153,6 +153,9 @@ jobs:
       - name: "JML: real Graph writes are safe to repeat (eventual consistency)"
         run: npm run -s test:graph < /dev/null
 
+      - name: "Scarlet acts first: forced tool call until she acts, never on models that reject it"
+        run: npm run -s test:act-first < /dev/null
+
       - name: "Test runs are tagged [MOCK] in Slack, real runs never are"
         run: |
           npm run -s test:mock-tag < /dev/null

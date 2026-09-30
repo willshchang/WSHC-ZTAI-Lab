@@ -40,6 +40,10 @@ export interface AgentPolicy {
   // NO SILENT FAILURE: at least one of these tools must succeed before
   // the run may end. Otherwise: one reminder, then a system-filed alert.
   requiredActions?: string[];
+  // ACT FIRST: until one of the requiredActions has succeeded, the model
+  // must call a tool (no plain-text reply). Once it has acted, it may
+  // finish normally. The no-silent-failure guard stays as the backstop.
+  actFirst?: boolean;
 }
 
 // ------------------------------------------------------------
@@ -108,9 +112,13 @@ export interface ModelRequest {
   system: string;
   messages: Message[];
   tools: AgentTool[];
+  mustUseTool?: boolean; // ask the model to call a tool this turn, if it can be forced
 }
 
 export interface ModelClient {
   label: string; // shown in logs, e.g. "claude-haiku-4-5" or "MOCK"
+  // True only if this model accepts a forced tool call (tool_choice "any").
+  // Unknown or unsupported models: false, and the loop relies on the guard.
+  canForceTool?: boolean;
   next: (req: ModelRequest) => Promise<ModelTurn>;
 }

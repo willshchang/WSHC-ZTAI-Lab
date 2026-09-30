@@ -19,6 +19,7 @@
     "test:jml": "node tests/jml.ts",
     "test:graph": "node tests/graph-idempotency.ts",
     "test:mock-tag": "node tests/mock-tag.ts",
+    "test:act-first": "node tests/act-first.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
