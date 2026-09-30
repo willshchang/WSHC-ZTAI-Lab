@@ -219,6 +219,15 @@ can add members by hand. JML's static groups are defined in
 | `hr-1005` | Leaver for a Terraform-managed user: refused, out of scope |
 | `hr-1006` | Joiner to an unknown team: refused |
 
+**Next steps (designed):** match people on the HR employee ID instead of the
+name (a new person gets an auto-numbered username like `maya.chen2`; a rehire
+goes to a separate, human-approved reactivation flow); for an unknown team,
+ask whether it's a typo, and if it's a new team, hand it to an access-change
+agent that opens a Terraform PR for the group, so agents propose structure as
+code instead of creating it; when a plan goes stale, rebuild it and ask for a
+fresh approval automatically; and move the lab's users out of Terraform into
+the HR feed, so Terraform owns structure and JML owns people.
+
 **Future design:** split into Joiner, Mover and Leaver agents, each with its own
 app registration and only its own permissions (the Leaver can't create users),
 solved together with secret sprawl so three agents never means three more
