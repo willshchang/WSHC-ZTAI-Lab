@@ -43,6 +43,9 @@ code. Nothing is clicked into existence by hand.
 > **Note:** Layer 1 was originally deployed to the tenant
 > `TinyCoDDG.onmicrosoft.com`. The docs use `<tenant>.onmicrosoft.com`
 > as a placeholder so the code stays portable to any tenant.
+> Hostnames, IPs, device names and identities across the repo are
+> placeholders too (`<tailnet>.ts.net`, `100.x.y.z`, `admin@example.com`).
+> Real values live only in gitignored `terraform.tfvars` files.
 
 ---
 

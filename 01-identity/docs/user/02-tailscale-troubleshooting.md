@@ -28,7 +28,7 @@ Before contacting ITOps, run through this checklist:
 - [ ] You can see `tinyco-vm` listed as a connected machine 
       in Tailscale
 - [ ] You are using the correct URL for Mattermost:
-      `https://tinyco-vm.hair-squeaker.ts.net/`
+      `https://tinyco-vm.<tailnet>.ts.net/`
 
 ---
 
@@ -49,7 +49,7 @@ URL times out or shows an error page.
 
 1. Verify you are using the exact correct URL — copy and paste 
    this directly:
-https://tinyco-vm.hair-squeaker.ts.net/
+https://tinyco-vm.<tailnet>.ts.net/
 
 2. Click the Tailscale icon in your system tray → confirm 
    `tinyco-vm` appears in the list of connected machines with 
@@ -57,7 +57,7 @@ https://tinyco-vm.hair-squeaker.ts.net/
 
 3. Test connectivity to the VM directly — open a terminal and run:
 ```bash
-   ping 100.83.194.101
+   ping 100.x.y.10
 ```
    If ping fails → the issue is Tailscale connectivity, 
    not Mattermost. Continue to the next steps.
@@ -230,7 +230,7 @@ before it even reaches the browser.
 **Steps to proceed:**
 
 - **Chrome/Edge:** Click **Advanced** → **Proceed to 
-  tinyco-vm.hair-squeaker.ts.net (unsafe)**
+  tinyco-vm.<tailnet>.ts.net (unsafe)**
 - **Firefox:** Click **Advanced** → **Accept the Risk 
   and Continue**
 - **Safari:** Click **Show Details** → **visit this website**

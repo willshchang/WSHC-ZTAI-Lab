@@ -109,7 +109,7 @@ equivalent to Slack.
 
 1. Ensure Tailscale shows **Connected** in your system tray
 2. Open your browser and go to:
-https://tinyco-vm.hair-squeaker.ts.net/<team-name>
+https://tinyco-vm.<tailnet>.ts.net/<team-name>
 3. Click **Sign in with Entra ID**
 4. Sign in with your TinyCo email
 5. Approve the MFA prompt on your phone
@@ -143,7 +143,7 @@ https://sso.online.tableau.com/public/idp/SSO
 Elastic is TinyCo's platform for infrastructure monitoring 
 and log analysis. Access is provided to relevant teams only.
 
-1. Go to https://tinyco-prod-cluster-3acb9f.kb.westus2.azure.elastic-cloud.com/
+1. Go to https://<your-elastic-deployment>.elastic-cloud.com/
 2. Click **Kibana Sign in with Entra ID SSO**
 3. Sign in with your TinyCo email
 4. Approve the MFA prompt on your phone

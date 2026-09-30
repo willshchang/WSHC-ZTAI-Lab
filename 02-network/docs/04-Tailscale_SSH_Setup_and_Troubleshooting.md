@@ -52,7 +52,7 @@ from your Windows identity or Tailscale email.
 
 **Linux users on the Azure VM:**
 - `tinyco-admin` — created during VM setup
-- `iwill` — created during Tailscale SSH lab setup
+- `<linux-user>` — created during Tailscale SSH lab setup
 - `root` — Linux superuser
 
 Your Windows PC name (`iWillWindows`) is NOT a Linux user — 
@@ -64,11 +64,11 @@ of Windows usernames.
 ```bash
 # ✅ Correct — specifies Linux user
 tailscale ssh tinyco-admin@tinyco-vm
-tailscale ssh iwill@tinyco-vm
+tailscale ssh <linux-user>@tinyco-vm
 
 # ❌ Fails — no Linux user matches Windows PC name
 tailscale ssh tinyco-vm
-# Error: failed to look up local user "IWILL-WINDOWS\\iwill"
+# Error: failed to look up local user "ADMIN-PC\\<user>"
 ```
 
 ---
@@ -81,16 +81,16 @@ Your Tailscale ACL defines which Linux users are permitted:
 "ssh": [
     {
         "action": "accept",
-        "src":    ["will.sh.chang@gmail.com"],
+        "src":    ["admin@example.com"],
         "dst":    ["tag:server"],
-        "users":  ["tinyco-admin", "iwill", "root"]
+        "users":  ["tinyco-admin", "<linux-user>", "root"]
     }
 ]
 ```
 
 **What this means:**
-- `will.sh.chang@gmail.com` can SSH to `tag:server` devices
-- But ONLY as Linux users: `tinyco-admin`, `iwill`, or `root`
+- `admin@example.com` can SSH to `tag:server` devices
+- But ONLY as Linux users: `tinyco-admin`, `<linux-user>`, or `root`
 - Any other Linux username = rejected even if Tailscale 
   identity is valid
 
@@ -103,14 +103,14 @@ config file on your Windows PC:
 
 **File location:** `C:\Users\YourName\.ssh\config`
 Host tinyco-vm
-User iwill
+User <linux-user>
 
 Now `tailscale ssh tinyco-vm` automatically connects as 
-`iwill` — no need to type `iwill@` every time.
+`<linux-user>` — no need to type `<linux-user>@` every time.
 
 **Multiple hosts:**
 Host tinyco-vm
-User iwill
+User <linux-user>
 Host work-server
 User tinyco-admin
 
@@ -118,7 +118,7 @@ User tinyco-admin
 > be careful not to accidentally write the word `nano` into 
 > the file. Use `echo` instead:
 > ```bash
-> echo -e "Host tinyco-vm\n    User iwill" > ~/.ssh/config
+> echo -e "Host tinyco-vm\n    User <linux-user>" > ~/.ssh/config
 > ```
 
 ---
@@ -126,7 +126,7 @@ User tinyco-admin
 ## Part 2 — Common Errors and Fixes
 
 ### Error: `cannot find user <windows-username>`
-tailscale: failed to look up local user "IWILL-WINDOWS\iwill"
+tailscale: failed to look up local user "ADMIN-PC\<user>"
 Connection closed by UNKNOWN port 65535
 
 **Cause:** No Linux username specified — SSH defaulted to 
@@ -180,7 +180,7 @@ tailscale status
 
 ### Error: `Access revoked` immediately after tagging device
 Access revoked.
-Connection to tinyco-vm.hair-squeaker.ts.net closed.
+Connection to tinyco-vm.<tailnet>.ts.net closed.
 
 **Cause:** Applying a tag transfers device ownership from 
 user account to the tag. User loses implicit access instantly — 
@@ -271,13 +271,13 @@ Always save ACL grants before applying tags to devices.
 ```bash
 # SSH with explicit user (always works)
 tailscale ssh tinyco-admin@tinyco-vm
-tailscale ssh iwill@tinyco-vm
+tailscale ssh <linux-user>@tinyco-vm
 
 # Check if Tailscale SSH is enabled
 tailscale status
 
 # Verify SSH connectivity
-tailscale ssh iwill@tinyco-vm echo "connection test"
+tailscale ssh <linux-user>@tinyco-vm echo "connection test"
 
 # Enable Tailscale SSH on VM
 sudo tailscale set --ssh

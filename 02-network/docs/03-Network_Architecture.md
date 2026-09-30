@@ -72,7 +72,7 @@ any resource.
 |---|---|
 | Location | Canada Central |
 | Device | `tinyco-vm` — Ubuntu 24.04 |
-| Tailscale IP | `100.93.4.6` |
+| Tailscale IP | `100.x.y.10` |
 | Tailscale tag | `tag:server` |
 | SSH | Tailscale SSH — identity authenticated, no password |
 | Port 22 | Closed via Azure NSG — public internet cannot reach |
@@ -102,7 +102,7 @@ Azure Cloud
 └── VNet — 10.0.0.0/24
 └── tinyco-vm
 ├── Private IP: 10.0.0.4 (internal, VNet only)
-└── Public IP:  20.63.73.34 (internet-facing, port 22 closed)
+└── Public IP:  <vm-public-ip> (internet-facing, port 22 closed)
 
 This is visible in the VM's routing table:
 
@@ -141,8 +141,8 @@ never appear on the public internet:
 |---|---|---|---|
 | **Location** | Physical router | Azure cloud | Virtual overlay — anywhere |
 | **Private IP range** | `192.168.1.0/24` | `10.0.0.0/24` | `100.x.x.x` |
-| **Controls it** | ASUS router / Telus modem | Azure portal / Terraform NSG | Tailscale ACL policy |
-| **Internet access** | Via Telus modem | Via Azure internet gateway | Via exit node |
+| **Controls it** | Wi-Fi router / ISP modem | Azure portal / Terraform NSG | Tailscale ACL policy |
+| **Internet access** | Via ISP modem | Via Azure internet gateway | Via exit node |
 | **Connects to Tailscale** | Via Apple TV subnet router | VM is direct Tailnet member | Native |
 | **Firewall** | Router rules | NSG inbound/outbound rules | ACL policy |
 
@@ -188,7 +188,7 @@ markdown---
 
 ## RFC 1918 — Private IP Addressing Explained
 
-When you see IP addresses like `10.0.0.4`, `192.168.1.254`, 
+When you see IP addresses like `10.0.0.4`, `192.168.1.1`, 
 or `172.17.0.0` — these are **private IP addresses** defined 
 by **RFC 1918** (Request for Comments 1918), the internet 
 standard published by IETF (Internet Engineering Task Force) 
@@ -245,7 +245,7 @@ separate from your home LAN or cloud VPC.
 ```bash
 # All three private ranges visible in our lab at once:
 tailscale status
-# 100.93.4.6  tinyco-vm     ← Tailscale CGNAT range
+# 100.x.y.10  tinyco-vm     ← Tailscale CGNAT range
 
 ip route show  # on Azure VM
 # 10.0.0.0/24 dev eth0      ← Azure VNet RFC 1918
@@ -288,18 +288,18 @@ sudo tailscale set --advertise-routes=8.8.8.0/24
 |---|---|
 | Subnet | `192.168.1.0/24` |
 | Tailscale tag | `tag:subnet-router` |
-| Primary router | `iwilltvliving` — Apple TV, ethernet, `100.109.140.74` |
-| HA router | `iwilltvmaster` — Apple TV, WiFi, `100.122.120.115` |
-| Gateway | `192.168.1.254` — Telus fibre modem |
-| AP | `192.168.1.59` — ASUS router (AP mode) |
+| Primary router | `tv-primary` — Apple TV, ethernet, `100.x.y.20` |
+| HA router | `tv-ha` — Apple TV, WiFi, `100.x.y.21` |
+| Gateway | `192.168.1.1` — ISP modem |
+| AP | `192.168.1.2` — Wi-Fi router (AP mode) |
 
 ### Engineer Devices
 
 | Device | Tailscale name | Identity |
 |---|---|---|
-| Windows PC | `iwillwindows` | `will.sh.chang@gmail.com` |
-| iPad Pro | `iwill14pro` | `will.sh.chang@gmail.com` |
-| iPhone | `iwillprom4` | `will.sh.chang@gmail.com` |
+| Windows PC | `admin-pc` | `admin@example.com` |
+| iPad Pro | `admin-tablet` | `admin@example.com` |
+| iPhone | `admin-phone` | `admin@example.com` |
 
 ---
 
@@ -331,9 +331,9 @@ Improvements:
 "ssh": [
     {
         "action": "accept",
-        "src":    ["will.sh.chang@gmail.com"],
+        "src":    ["admin@example.com"],
         "dst":    ["tag:server"],
-        "users":  ["tinyco-admin", "iwill", "root"]
+        "users":  ["tinyco-admin", "<linux-user>", "root"]
     }
 ]
 ```
@@ -343,20 +343,20 @@ Improvements:
 ## Site-to-Site Architecture
 
 ### How it works
-Azure VM (Site A, 100.93.4.6)
+Azure VM (Site A, 100.x.y.10)
 ↓ Tailscale encrypted tunnel
-Apple TV subnet router (Site B, 100.109.140.74)
+Apple TV subnet router (Site B, 100.x.y.20)
 ↓ SNAT — rewrites source IP
 192.168.1.0/24 home LAN
-→ 192.168.1.254 (Telus modem)
-→ 192.168.1.59 (ASUS AP)
+→ 192.168.1.1 (ISP modem)
+→ 192.168.1.2 (Wi-Fi AP)
 → Any non-Tailscale device on the subnet
 
 ### Connection type
 
 Traffic between Azure VM and Apple TV travels via DERP 
 (Detoured Encrypted Routing Protocol) Seattle relay due to 
-double NAT (Telus modem + ASUS AP mode). Traffic remains 
+double NAT (ISP modem + Wi-Fi AP mode). Traffic remains 
 end-to-end encrypted — DERP only sees encrypted packets.
 
 Typical latency:
@@ -375,17 +375,17 @@ Azure VM's Tailscale IP.
 ## High Availability Subnet Routing
 
 Two Apple TVs advertise the same `192.168.1.0/24` subnet:
-iwilltvliving (primary, ethernet) ─── 192.168.1.0/24
-iwilltvmaster (standby, WiFi)    ─── 192.168.1.0/24
+tv-primary (primary, ethernet) ─── 192.168.1.0/24
+tv-ha (standby, WiFi)    ─── 192.168.1.0/24
 
-Tailscale selects `iwilltvliving` as primary (lower latency 
+Tailscale selects `tv-primary` as primary (lower latency 
 via ethernet). If primary goes offline, Tailscale automatically 
-fails over to `iwilltvmaster` — zero client configuration 
+fails over to `tv-ha` — zero client configuration 
 required.
 
 **HA failover verified:**
 Disabled primary subnet route in admin console → pinged 
-`192.168.1.254` from Azure VM → 4/4 packets received via 
+`192.168.1.1` from Azure VM → 4/4 packets received via 
 secondary Apple TV. Failover time: ~5 seconds.
 
 **Verify active primary:**
@@ -418,15 +418,15 @@ for peer in data.get('Peer',{}).values():
 | `tag:subnet-router` | Both Apple TVs | Network infrastructure |
 
 User devices carry no tags — identified by Tailscale identity 
-(`will.sh.chang@gmail.com`) which maps back to Entra ID via SSO.
+(`admin@example.com`) which maps back to Entra ID via SSO.
 
 ### Access matrix
 
 | Source | Destination | Access |
 |---|---|---|
-| `will.sh.chang@gmail.com` | `tag:server` | ✅ Full |
-| `will.sh.chang@gmail.com` | `tag:subnet-router` | ✅ Full |
-| `will.sh.chang@gmail.com` | `192.168.1.0/24` | ✅ Full |
+| `admin@example.com` | `tag:server` | ✅ Full |
+| `admin@example.com` | `tag:subnet-router` | ✅ Full |
+| `admin@example.com` | `192.168.1.0/24` | ✅ Full |
 | `tag:server` | `192.168.1.0/24` | ✅ Full |
 | `tag:server` | user devices | ❌ Blocked (implicit deny) |
 | `tag:subnet-router` | anywhere | ❌ Blocked (implicit deny) |
@@ -491,12 +491,12 @@ consent.
 resource "tailscale_acl" "policy" {
   acl = jsonencode({
     tagOwners = {
-      "tag:server"        = ["will.sh.chang@gmail.com"]
-      "tag:subnet-router" = ["will.sh.chang@gmail.com"]
+      "tag:server"        = ["admin@example.com"]
+      "tag:subnet-router" = ["admin@example.com"]
     }
     grants = [
       {
-        src = ["will.sh.chang@gmail.com"]
+        src = ["admin@example.com"]
         dst = ["tag:server"]
         ip  = ["*"]
       }
@@ -504,9 +504,9 @@ resource "tailscale_acl" "policy" {
     ssh = [
       {
         action = "accept"
-        src    = ["will.sh.chang@gmail.com"]
+        src    = ["admin@example.com"]
         dst    = ["tag:server"]
-        users  = ["tinyco-admin", "iwill"]
+        users  = ["tinyco-admin", "<linux-user>"]
       }
     ]
   })
@@ -517,7 +517,7 @@ resource "tailscale_acl" "policy" {
 
 Current DERP relay latency (~75ms) is acceptable for the lab. 
 To establish direct P2P connection, enable UDP port forwarding 
-on the Telus modem for port `41641` pointing to Apple TV LAN IP.
+on the ISP modem for port `41641` pointing to Apple TV LAN IP.
 
 Note: This requires manual router configuration and partially 
 defeats Tailscale's zero-configuration value proposition. 
@@ -534,7 +534,7 @@ plan.
 "ssh": [
     {
         "action": "accept",
-        "src":    ["will.sh.chang@gmail.com"],
+        "src":    ["admin@example.com"],
         "dst":    ["tag:server"],
         "users":  ["tinyco-admin"],
         "recordingTargets": ["tag:logging-server"]

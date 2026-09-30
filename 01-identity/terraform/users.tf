@@ -69,14 +69,14 @@ data "azuread_user" "primary_admin" {
 # ============================================================
 # BREAK-GLASS EMERGENCY ACCESS ACCOUNT (DYNAMIC NAME)
 # ============================================================
-# This resource uses string functions to split the prefix (e.g., "admin.test")
+# This resource uses string functions to split the prefix (e.g., "breakglass.admin")
 # into First and Last names, ensuring NO hardcoded strings exist.
 
 resource "azuread_user" "breakglass" {
   user_principal_name = "${var.breakglass_account_prefix}@${var.domain_name}"
   mail_nickname       = var.breakglass_account_prefix
 
-  # Dynamically split "admin.test" into "Admin" and "Test"
+  # Dynamically split "breakglass.admin" into "Admin" and "Test"
   # title() capitalizes the first letter; split() breaks the string at the dot
   display_name = title(replace(var.breakglass_account_prefix, ".", " "))
   given_name   = title(split(".", var.breakglass_account_prefix)[0])

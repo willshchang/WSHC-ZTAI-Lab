@@ -39,8 +39,8 @@ resource "tailscale_dns_preferences" "main" {
 
 **Why MagicDNS matters:**
 Without MagicDNS, devices are reached only by Tailscale IP 
-(e.g. `100.93.4.6`). With MagicDNS, devices resolve by hostname 
-(e.g. `tinyco-vm.hair-squeaker.ts.net`) — making the Tailnet 
+(e.g. `100.x.y.10`). With MagicDNS, devices resolve by hostname 
+(e.g. `tinyco-vm.<tailnet>.ts.net`) — making the Tailnet 
 feel like a real corporate LAN regardless of physical location.
 
 MagicDNS is required for:

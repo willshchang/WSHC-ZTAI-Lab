@@ -206,7 +206,7 @@ of more granular, auditable custom policies.
 
 ## Break-Glass Account
 
-**Account:** `admin.test@<tenant>.onmicrosoft.com`  
+**Account:** `breakglass.admin@<tenant>.onmicrosoft.com`  
 **Role:** Global Administrator  
 **Purpose:** Emergency access when all other admin accounts are unavailable  
 **Password:** Stored outside the repo in a password manager

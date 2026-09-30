@@ -113,7 +113,7 @@ benefits of centralised identity via Entra ID.
 Always authenticate your Azure CLI (Command Line Interface) session 
 before running Terraform:
 ```bash
-az login --tenant "42a9915e-aa4a-4426-9a86-a04a0dac6222" \
+az login --tenant "<tenant-id>" \
   --scope "https://graph.microsoft.com/.default"
 ```
 

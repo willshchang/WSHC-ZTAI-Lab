@@ -54,7 +54,7 @@ designed in this lab:
 
 | Entra ID Role | Tailscale ACL Identity | Access |
 |---|---|---|
-| Global Administrator (ITOps) | `will.sh.chang@gmail.com` | Full infrastructure access |
+| Global Administrator (ITOps) | `admin@example.com` | Full infrastructure access |
 | Infrastructure device | `tag:server` | Subnet access only |
 | Network device | `tag:subnet-router` | Routes traffic, no direct access |
 
@@ -79,15 +79,15 @@ enforced at both identity and network layers.
 | Device | Tailscale Name | Tag | Role |
 |---|---|---|---|
 | Azure VM | `tinyco-vm` | `tag:server` | Cloud infrastructure |
-| Living Room Apple TV | `iwilltvliving` | `tag:subnet-router` | Primary subnet router |
-| Bedroom Apple TV | `iwilltvmaster` | `tag:subnet-router` | HA subnet router |
-| Windows PC | `iwillwindows` | none | ITOps engineer device |
-| iPad Pro | `iwill14pro` | none | ITOps engineer device |
-| iPhone | `iwillprom4` | none | ITOps engineer device |
+| Primary Apple TV | `tv-primary` | `tag:subnet-router` | Primary subnet router |
+| HA Apple TV | `tv-ha` | `tag:subnet-router` | HA subnet router |
+| Windows PC | `admin-pc` | none | ITOps engineer device |
+| iPad Pro | `admin-tablet` | none | ITOps engineer device |
+| iPhone | `admin-phone` | none | ITOps engineer device |
 
 **Why user devices have no tags:**
 User devices are identified by the Tailscale user identity 
-(`will.sh.chang@gmail.com`) — not by tags. Tags are for 
+(`admin@example.com`) — not by tags. Tags are for 
 infrastructure devices that aren't tied to a specific user.
 
 ---
@@ -102,7 +102,7 @@ in grants.
 
 ```json
 "tagOwners": {
-    "tag:terraform":     ["will.sh.chang@gmail.com"],
+    "tag:terraform":     ["admin@example.com"],
     "tag:server":        ["tag:terraform"],
     "tag:subnet-router": ["tag:terraform"]
 }
@@ -144,7 +144,7 @@ access is only via explicit ACL grants.
 Tag applied to tinyco-vm
 ↓ immediately
 Access revoked.
-Connection to tinyco-vm.hair-squeaker.ts.net closed.
+Connection to tinyco-vm.<tailnet>.ts.net closed.
 
 This is Zero Trust working correctly — no grace period, 
 no legacy access.
@@ -158,7 +158,7 @@ The main access rules. Replaces the older `acls` field.
 
 ```json
 {
-    "src": ["will.sh.chang@gmail.com"],
+    "src": ["admin@example.com"],
     "dst": ["tag:server"],
     "ip":  ["*"]
 }
@@ -196,7 +196,7 @@ yourself out. Requires `hostname:port` format:
 ```json
 "tests": [
     {
-        "src":    "will.sh.chang@gmail.com",
+        "src":    "admin@example.com",
         "accept": ["tag:server:22", "tag:subnet-router:80"],
         "deny":   []
     }
@@ -220,27 +220,27 @@ yourself out. Requires `hostname:port` format:
   // ============================================================
 
   "tagOwners": {
-    "tag:server":        ["will.sh.chang@gmail.com"],
-    "tag:subnet-router": ["will.sh.chang@gmail.com"]
+    "tag:server":        ["admin@example.com"],
+    "tag:subnet-router": ["admin@example.com"]
   },
 
   "grants": [
     // ITOps Engineer — full access to cloud infrastructure
     // Mirrors: TinyCo-ITOps → Global Administrator in Entra
     {
-      "src": ["will.sh.chang@gmail.com"],
+      "src": ["admin@example.com"],
       "dst": ["tag:server"],
       "ip":  ["*"]
     },
     // ITOps Engineer — full access to subnet router devices
     {
-      "src": ["will.sh.chang@gmail.com"],
+      "src": ["admin@example.com"],
       "dst": ["tag:subnet-router"],
       "ip":  ["*"]
     },
     // ITOps Engineer — access to home LAN via subnet router
     {
-      "src": ["will.sh.chang@gmail.com"],
+      "src": ["admin@example.com"],
       "dst": ["192.168.1.0/24"],
       "ip":  ["*"]
     },
@@ -262,15 +262,15 @@ yourself out. Requires `hostname:port` format:
     // Identity-verified — no passwords, browser auth
     {
       "action": "accept",
-      "src":    ["will.sh.chang@gmail.com"],
+      "src":    ["admin@example.com"],
       "dst":    ["tag:server"],
-      "users":  ["tinyco-admin", "iwill", "root"]
+      "users":  ["tinyco-admin", "<linux-user>", "root"]
     }
   ],
 
   "tests": [
     {
-      "src":    "will.sh.chang@gmail.com",
+      "src":    "admin@example.com",
       "accept": ["tag:server:22", "tag:subnet-router:80", "192.168.1.1:80"],
       "deny":   []
     }
@@ -297,14 +297,14 @@ plan CLI. Tag via admin console:
 
 Admin console → **Machines** → `tinyco-vm` → three dots → 
 **Edit tags** → select `tag:server` → set owner to 
-`will.sh.chang@gmail.com` → Save
+`admin@example.com` → Save
 
 **Apple TVs — admin console only (no tvOS CLI):**
 
-Admin console → **Machines** → `iwilltvliving` → three dots → 
+Admin console → **Machines** → `tv-primary` → three dots → 
 **Edit tags** → select `tag:subnet-router` → Save
 
-Repeat for `iwilltvmaster`.
+Repeat for `tv-ha`.
 
 > **Warning:** Tagging a device immediately transfers ownership 
 > from your user account to the tag. Access is revoked instantly 
@@ -331,7 +331,7 @@ prevents saving — your safety net against lockout.
 ### SSH Access Revoked and Restored
 Tag applied — access immediately revoked
 Access revoked.
-Connection to tinyco-vm.hair-squeaker.ts.net closed.
+Connection to tinyco-vm.<tailnet>.ts.net closed.
 ACL not yet saved — SSH blocked by policy
 $ tailscale ssh tinyco-admin@tinyco-vm
 tailscale: tailnet policy does not permit you to SSH to this node
@@ -353,35 +353,35 @@ After ACL policy applied, Azure VM successfully reaches
 home LAN devices via Apple TV subnet router:
 
 ```bash
-# Telus modem (192.168.1.254) — non-Tailscale device
-ping -c 4 192.168.1.254
+# ISP modem (192.168.1.1) — non-Tailscale device
+ping -c 4 192.168.1.1
 
-PING 192.168.1.254 (192.168.1.254) 56(84) bytes of data.
-64 bytes from 192.168.1.254: icmp_seq=1 ttl=64 time=315 ms
-64 bytes from 192.168.1.254: icmp_seq=2 ttl=64 time=81.5 ms
-64 bytes from 192.168.1.254: icmp_seq=3 ttl=64 time=83.4 ms
-64 bytes from 192.168.1.254: icmp_seq=4 ttl=64 time=80.6 ms
---- 192.168.1.254 ping statistics ---
+PING 192.168.1.1 (192.168.1.1) 56(84) bytes of data.
+64 bytes from 192.168.1.1: icmp_seq=1 ttl=64 time=315 ms
+64 bytes from 192.168.1.1: icmp_seq=2 ttl=64 time=81.5 ms
+64 bytes from 192.168.1.1: icmp_seq=3 ttl=64 time=83.4 ms
+64 bytes from 192.168.1.1: icmp_seq=4 ttl=64 time=80.6 ms
+--- 192.168.1.1 ping statistics ---
 4 packets transmitted, 4 received, 0% packet loss
 ```
 
 ```bash
-# ASUS router in AP mode (192.168.1.59) — non-Tailscale device
-ping -c 4 192.168.1.59
+# Wi-Fi router in AP mode (192.168.1.2) — non-Tailscale device
+ping -c 4 192.168.1.2
 
-PING 192.168.1.59 (192.168.1.59) 56(84) bytes of data.
-64 bytes from 192.168.1.59: icmp_seq=1 ttl=64 time=86.9 ms
-64 bytes from 192.168.1.59: icmp_seq=2 ttl=64 time=82.7 ms
-64 bytes from 192.168.1.59: icmp_seq=3 ttl=64 time=81.0 ms
-64 bytes from 192.168.1.59: icmp_seq=4 ttl=64 time=82.1 ms
---- 192.168.1.59 ping statistics ---
+PING 192.168.1.2 (192.168.1.2) 56(84) bytes of data.
+64 bytes from 192.168.1.2: icmp_seq=1 ttl=64 time=86.9 ms
+64 bytes from 192.168.1.2: icmp_seq=2 ttl=64 time=82.7 ms
+64 bytes from 192.168.1.2: icmp_seq=3 ttl=64 time=81.0 ms
+64 bytes from 192.168.1.2: icmp_seq=4 ttl=64 time=82.1 ms
+--- 192.168.1.2 ping statistics ---
 4 packets transmitted, 4 received, 0% packet loss
 ```
 
 **Latency observation:**
-First ping to `192.168.1.254` shows `315ms` — DERP relay 
+First ping to `192.168.1.1` shows `315ms` — DERP relay 
 negotiating the path after ACL was applied. Subsequent pings 
-drop to `80-83ms` as the path is optimised. `192.168.1.59` 
+drop to `80-83ms` as the path is optimised. `192.168.1.2` 
 pings are consistent at `81-86ms` — path was already cached 
 from the previous ping sequence.
 
@@ -413,9 +413,9 @@ rule is missing from the policy.
 "ssh": [
     {
         "action": "accept",
-        "src":    ["will.sh.chang@gmail.com"],
+        "src":    ["admin@example.com"],
         "dst":    ["tag:server"],
-        "users":  ["tinyco-admin", "iwill", "root"]
+        "users":  ["tinyco-admin", "<linux-user>", "root"]
     }
 ]
 ```
@@ -428,7 +428,7 @@ rule is missing from the policy.
 
 ## Production ACL Design — Multi-Site, Role and Function Based
 
-The lab ACL uses a single identity (`will.sh.chang@gmail.com`) 
+The lab ACL uses a single identity (`admin@example.com`) 
 with full access — appropriate for a personal lab. In 
 production, ACL policy becomes significantly more granular, 
 reflecting the organisation's site structure, team roles, 
@@ -632,8 +632,8 @@ resource "tailscale_device_tags" "vm_tags" {
 resource "tailscale_acl" "policy" {
   acl = jsonencode({
     tagOwners = {
-      "tag:server"        = ["will.sh.chang@gmail.com"]
-      "tag:subnet-router" = ["will.sh.chang@gmail.com"]
+      "tag:server"        = ["admin@example.com"]
+      "tag:subnet-router" = ["admin@example.com"]
     }
     grants = [...]
     ssh    = [...]
