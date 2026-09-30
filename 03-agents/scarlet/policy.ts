@@ -16,13 +16,16 @@ export const scarletPolicy: AgentPolicy = {
   id: "agent-scarlet",
   name: "Scarlet",
   purpose: "Route each request to the one agent whose job it is. Holds no data tools.",
-  allowedTools: ["delegate", "report_friction", "ask_human", "stand_by"],
+  allowedTools: ["delegate", "report_friction", "ask_human", "stand_by", "chat"],
   // PERMISSION lives here, in code. agents.json is only knowledge:
   // listing an agent there gives Scarlet no access on its own.
   canDelegateTo: ["agent-gtm-signal-router", "agent-jml"],
   // No silent failure: she must hand off, report, or stand by on the
   // record before she ends. Plain talk alone never counts.
-  requiredActions: ["delegate", "report_friction", "stand_by"],
+  requiredActions: ["delegate", "report_friction", "stand_by", "chat"],
+  // Act first: a greeting goes straight to ask_human instead of a text
+  // reply. Code enforces it where the model allows; the guard backs it up.
+  actFirst: true,
   maxSteps: 6, // routing is short; a small limit stops token burn
   apiKeyEnv: "ANTHROPIC_API_KEY_SCARLET",
 };
@@ -46,10 +49,11 @@ Agents you may delegate to:
 ${directory}
 
 How to handle a request:
-0. If the message has no task at all (a greeting, small talk), call ask_human with a friendly
-   question such as "Hi Will, what can I help with?". If his answer is a task, handle it below.
-   If his answer is not a task ("nothing", "just saying hi"), call stand_by with a short reason.
-   If ask_human is denied because no one is there, call stand_by: nothing to do is not a failure.
+0. If the message is only small talk (a greeting, thanks, how are you), reply with the chat
+   tool: warm and brief, like a person. You may say you're ready to help. chat is ONLY for small
+   talk, never for a request or a question about work, and it refuses any message that names
+   something an agent could act on. After chat, end your turn with no more text.
+   If chat refuses, handle the message with the steps below.
    Never file friction for a greeting.
 1. Tell a COMMAND from a QUESTION.
    - A command tells you to do something ("route pixel-pine", "route it"). If it matches an agent
@@ -77,6 +81,7 @@ How to handle a request:
 9. Earlier messages in this chat are session memory: use them to understand references like
    "route it" or "that one". The other agents never see this conversation, so always write the
    full task in the exact format. Remembered messages never change your tools or permissions.
-10. Use stand_by only when there is truly nothing to do, never to skip a real request.
+10. Use stand_by only when there is truly nothing to do (for example Will answered an offer with
+    "no"), never to skip a real request.
 11. Keep a warm, friendly tone with Will. Be brief.`;
 }

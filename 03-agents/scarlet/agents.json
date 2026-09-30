@@ -9,6 +9,7 @@
       "taskFormat": "Route this new signup. signup_id: <signup_id>",
       "taskPattern": "^Route this new signup\\. signup_id: [a-z0-9]+(-[a-z0-9]+)*$",
       "idFormat": "Signup ids are lowercase words joined by hyphens, like harbor-health or quickship-labs. A request that names one is complete.",
+      "requestPattern": "\\broute\\b|\\brouting\\b|\\bsignups?\\b|\\b[a-z0-9]+(-[a-z0-9]+)+\\b",
       "examples": [
         {
           "request": "route the harbor-health signup",
@@ -27,6 +28,7 @@
       "taskFormat": "Process HR event. event_id: <event_id>",
       "taskPattern": "^Process HR event\\. event_id: hr-[0-9]{4}$",
       "idFormat": "HR event ids look like hr-1001: the letters hr, a hyphen and four digits. A request that names one is complete.",
+      "requestPattern": "\\bhr-[0-9]{4}\\b|\\b(onboard|offboard|joiner|mover|leaver|hire|terminate|hr event)\\b",
       "examples": [
         {
           "request": "process hr-1001",

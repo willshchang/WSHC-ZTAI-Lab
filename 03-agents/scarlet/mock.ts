@@ -10,8 +10,8 @@
 //   3. signup request with no id       -> friction, then ask_human
 //      (denied with no one at the keyboard; answered at a terminal)
 //   4. request no agent handles        -> friction, no guessing
-//   5. a greeting ("hello scarlet")    -> ask Will what he needs;
-//      no task (or no one there) -> stand_by on the record
+//   5. a greeting ("hello scarlet")    -> a warm reply through the
+//      chat tool (small talk, on the record, no reminder)
 //   6. "simulate a chatty model"       -> a model that only talks;
 //      the no-silent-failure guard must fire
 //   7. "route it" in a session         -> uses session memory to find
@@ -100,25 +100,11 @@ export function createScarletMock(): ModelClient {
         return finish("[simulated chatty model] Hi Will! What would you like me to work on today?");
       }
 
-      // Scenario 5: a greeting with no task -> ask, then act on the answer
-      if (/^\s*(hi|hello|hey)\b/i.test(request)) {
-        if (!asked) {
-          return toolUse("ask_human", { question: "Hi Will! What can I help with?" }, "No task yet, so I'll ask.");
-        }
-        const answer = failed(asked) ? "" : String(JSON.parse(asked.output).answer ?? "");
-        const answered = findSignup(answer);
-        if (answered) {
-          return toolUse(
-            "delegate",
-            { agent: "agent-gtm-signal-router", task: `Route this new signup. signup_id: ${answered.id}` },
-            `On it. Handing ${answered.id} to the GTM Signal Router.`,
-          );
-        }
-        return toolUse(
-          "stand_by",
-          { reason: failed(asked) ? "No task, and no one is at the keyboard" : "Will has no task right now" },
-          "Nothing to do right now.",
-        );
+      // Scenario 5: a greeting with no task -> small talk through chat
+      const chatted = last("chat");
+      if (chatted && !failed(chatted)) return finish("");
+      if (/^\s*(hi|hello|hey|good morning)\b/i.test(request) && !chatted) {
+        return toolUse("chat", { message: "Hi Will! Ready when you are. What are we working on?" }, "");
       }
 
       // Scenario 8: a QUESTION about a signup -> offer first, act only on a yes

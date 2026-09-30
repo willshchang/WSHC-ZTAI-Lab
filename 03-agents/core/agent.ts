@@ -92,7 +92,13 @@ export async function runAgent(opts: RunOptions): Promise<RunResult> {
   });
   log(`\n▶ ${policy.name} [${policy.id}] | model: ${model.label} | run: ${trace.runId}`);
   if (parent) log(`  Requested by ${parent.agentId} | request: ${trace.requestId}`);
-  log(`  Tools allowed: ${offered.map((t) => t.name).join(", ")}\n`);
+  log(`  Tools allowed: ${offered.map((t) => t.name).join(", ")}`);
+  if (policy.actFirst) {
+    log(model.canForceTool
+      ? `  Act first: must call a tool until it has acted`
+      : `  Act first: this model can't force a tool call, so the guard alone enforces it`);
+  }
+  log("");
 
   const messages: Message[] = [...(opts.history ?? []), { role: "user", content: task }];
   let finalText = "";
@@ -108,9 +114,15 @@ export async function runAgent(opts: RunOptions): Promise<RunResult> {
     outcome,
   });
 
+  const required = policy.requiredActions ?? [];
+  const hasActed = () => required.length === 0 || required.some((name) => succeeded.has(name));
+
   for (let step = 1; step <= policy.maxSteps; step++) {
-    const turn = await model.next({ system, messages, tools: offered });
-    trace.record("model_turn", { stopReason: turn.stopReason, blocks: turn.blocks });
+    // ACT FIRST: force a tool call until the agent has acted, then let
+    // it finish with a normal summary (forcing every turn would loop)
+    const mustUseTool = Boolean(policy.actFirst) && !hasActed();
+    const turn = await model.next({ system, messages, tools: offered, mustUseTool });
+    trace.record("model_turn", { stopReason: turn.stopReason, mustUseTool, blocks: turn.blocks });
     messages.push({ role: "assistant", content: turn.blocks });
 
     for (const b of turn.blocks) {
@@ -128,8 +140,7 @@ export async function runAgent(opts: RunOptions): Promise<RunResult> {
       // NO SILENT FAILURE: an agent with required actions may not
       // just talk and stop. One reminder, then the system alerts.
       // ------------------------------------------------------
-      const required = policy.requiredActions ?? [];
-      const acted = required.length === 0 || required.some((name) => succeeded.has(name));
+      const acted = hasActed();
       if (!acted && !reminded) {
         reminded = true;
         const reminder =
@@ -225,7 +236,7 @@ async function handleToolCall(
     };
   }
 
-  log(`🔧 ${tool.name} (${tool.risk}) ${preview(call.input)}`);
+  if (!tool.printsOwnLine) log(`🔧 ${tool.name} (${tool.risk}) ${preview(call.input)}`);
   trace.record("tool_call", { tool: tool.name, risk: tool.risk, input: call.input });
 
   // ----------------------------------------------------------

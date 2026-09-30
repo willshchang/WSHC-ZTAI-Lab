@@ -105,7 +105,8 @@ she held the other agents' tools, she would be the god-mode agent by the back do
 | `delegate` | internal-write | Hands a task to one agent on her allowlist |
 | `report_friction` | internal-write | Reports a request she can't route safely, instead of guessing |
 | `ask_human` | read | Asks Will one clarifying question in the terminal |
-| `stand_by` | read | Says, on the record, "there's nothing to do" (a greeting, no task). Traced, no Slack post |
+| `stand_by` | read | Says, on the record, "there's nothing to do" (for example Will declined an offer). Traced, no Slack post |
+| `chat` | read | Replies to small talk like a person ("Good morning, Will!"), on the record. **Refuses any message that matches an agent's `requestPattern`** (its ids and action words, from `agents.json`), so small talk can never swallow a real request |
 
 **Coordinator safety rules:**
 
@@ -123,7 +124,8 @@ she held the other agents' tools, she would be the god-mode agent by the back do
 | **Fails closed** | A malformed `agents.json`, or one naming an agent with no runner, stops Scarlet from starting |
 | **Commands vs questions** | A command ("route pixel-pine") is acted on right away. A question ("what can you do about pixel-pine?") gets an offer first, and only a yes starts the job. Two separate consents: to the task (Scarlet's offer) and to the action (the agent's approval gate) |
 | **Human in the loop, both ways** | With Will at the keyboard she can ask; with no one there the question is denied and she reports the gap. Max 3 questions; answers never change her permissions |
-| **No silent failure** | If she ends by only talking, she gets one reminder. Then the system files the alert, marks the run `no_action`, and shows a warning. Standing by counts as acting only because it's an explicit, traced decision |
+| **Act first** | Until she has handed off, reported, stood by or chatted, the API call forces a tool call (`tool_choice: any`), so a greeting becomes a `chat` reply instead of plain text and a reminder. A refused `chat` doesn't count, so a request still has to be delegated, offered or asked about. Once she has acted she can finish with a summary. Only on models that accept it (an allowlist, Haiku 4.5 today): Opus 5.5 and Sonnet 5.5 reject forced tool calls, and an unknown model gets the safe default |
+| **No silent failure** | The backstop. If she ends by only talking anyway, she gets one reminder. Then the system files the alert, marks the run `no_action`, and shows a warning. Standing by counts as acting only because it's an explicit, traced decision |
 | **Session memory, hers alone** | In a chat session she remembers the last 20 messages (text only, never raw tool data), so "route it" works. Workers never see it: the contract task is all they get. Wiped on `exit` or after 30 minutes idle, never saved to disk. One session ID joins every trace in the session |
 | **Joined traces** | One request ID runs through Scarlet's trace and the agent's trace. The agent's trace also records which run handed it the work (the same parent/child idea as OpenTelemetry spans) |
 
@@ -136,7 +138,7 @@ she held the other agents' tools, she would be the god-mode agent by the back do
 | `"route the new signup"` | No signup id: she reports the gap, then asks Will. With no one at the keyboard the question is denied |
 | `"write me a poem about tacos"` | No agent owns this job: reported, not guessed |
 | `"what can you do about pixel-pine?"` | A question: she offers first. With no one at the keyboard, the offer goes unanswered and she stands by. No job starts without a yes |
-| `"hello scarlet"` | No task: she asks what Will needs. "Nothing" (or no one at the keyboard) ends in `stand_by`, not a report |
+| `"hello scarlet"` | Small talk: a warm `chat` reply on the record, with no report and no reminder |
 | `"simulate a chatty model"` | A model that only chats and never acts: reminder, then a system alert |
 
 **Where her knowledge lives:** `scarlet/agents.json`, a small definition file
@@ -308,6 +310,8 @@ npm run test:policy        # policy blocks a tool that exists but isn't allowed
 npm run test:jml           # JML guards, executor, stale plans, password handling
 npm run test:graph         # real Graph writes are safe to repeat (stubbed network)
 npm run test:mock-tag      # test runs are tagged [MOCK] in Slack, real runs never are
+npm run test:act-first     # Scarlet must use a tool until she acts; never forced on models that reject it
+npm run test:chat          # chat is small talk only: it refuses anything an agent could act on
 npm run typecheck          # type-check everything
 ```
 
@@ -325,7 +329,7 @@ nothing. The sweeps found and fixed checks that were passing for the wrong
 reason, for example a grep that matched a header instead of a real tool call,
 and a password test that searched for the word "password" instead of the real
 value. Every new control since ships with its own sweep (JML guards, safe
-repeats, status cards, already-done reporting, `[MOCK]` tagging).
+repeats, status cards, already-done reporting, `[MOCK]` tagging, act first, the chat backstop).
 
 ### Slack Setup
 

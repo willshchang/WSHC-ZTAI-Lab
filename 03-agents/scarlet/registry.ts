@@ -42,16 +42,21 @@ export interface AgentEntry {
   taskFormat: string;
   taskPattern: RegExp; // the contract: a task must match this exactly
   idFormat: string;
+  // What a request for this agent can look like (its ids and action
+  // words). The chat tool refuses any message that matches, so small
+  // talk can never swallow a real request. Knowledge, reviewed in git.
+  requestPattern: RegExp;
   examples: { request: string; action: string }[];
   run: Runner;
 }
 
 const FILE = new URL("./agents.json", import.meta.url);
 
-export function loadRegistry(): AgentEntry[] {
+// `file` is only overridden by tests, to prove a bad directory fails closed
+export function loadRegistry(file: URL | string = FILE): AgentEntry[] {
   let raw: unknown;
   try {
-    raw = JSON.parse(readFileSync(FILE, "utf8"));
+    raw = JSON.parse(readFileSync(file, "utf8"));
   } catch (err) {
     throw new Error(`Refusing to start: agents.json could not be read (${(err as Error).message})`);
   }
@@ -66,7 +71,7 @@ export function loadRegistry(): AgentEntry[] {
 
   const seen = new Set<string>();
   return (list as Record<string, unknown>[]).map((a, i) => {
-    for (const key of ["id", "name", "handles", "taskFormat", "taskPattern", "idFormat"]) {
+    for (const key of ["id", "name", "handles", "taskFormat", "taskPattern", "idFormat", "requestPattern"]) {
       if (!isText(a[key])) fail(`agent #${i + 1} is missing "${key}"`);
     }
     const id = a.id as string;
@@ -82,6 +87,12 @@ export function loadRegistry(): AgentEntry[] {
     } catch {
       return fail(`"${id}" has a broken taskPattern`);
     }
+    let requestPattern: RegExp;
+    try {
+      requestPattern = new RegExp(a.requestPattern as string, "i");
+    } catch {
+      return fail(`"${id}" has a broken requestPattern`);
+    }
 
     const examples = Array.isArray(a.examples)
       ? (a.examples as { request: string; action: string }[]).filter((e) => isText(e?.request) && isText(e?.action))
@@ -94,6 +105,7 @@ export function loadRegistry(): AgentEntry[] {
       taskFormat: a.taskFormat as string,
       taskPattern,
       idFormat: a.idFormat as string,
+      requestPattern,
       examples,
       run: run!,
     };

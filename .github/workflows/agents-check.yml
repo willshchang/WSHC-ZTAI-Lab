@@ -109,11 +109,12 @@ jobs:
           grep -q "🔧 ask_human" <<< "$out" || { echo "FAIL: she didn't ask"; exit 1; }
           grep -q "question is DENIED by default" <<< "$out" || { echo "FAIL: question not denied without a human"; exit 1; }
 
-      - name: "Scarlet: a greeting with no one at the keyboard ends in stand_by, not a report"
+      - name: "Scarlet: a greeting gets a chat reply on the record, not a report or a reminder"
         run: |
           out=$(npm run -s scarlet:mock -- "hello scarlet" < /dev/null)
           echo "$out"
-          grep -q "is standing by" <<< "$out" || { echo "FAIL: no stand_by"; exit 1; }
+          grep -q "💭 Hi Will! Ready when you are" <<< "$out" || { echo "FAIL: no chat reply"; exit 1; }
+          grep -q "ended without acting" <<< "$out" && { echo "FAIL: the guard had to remind her"; exit 1; }
           grep -q "🔧 report_friction" <<< "$out" && { echo "FAIL: a greeting was reported as friction"; exit 1; }
           grep -q "Scarlet done in" <<< "$out" || { echo "FAIL: did not finish cleanly"; exit 1; }
 
@@ -152,6 +153,12 @@ jobs:
 
       - name: "JML: real Graph writes are safe to repeat (eventual consistency)"
         run: npm run -s test:graph < /dev/null
+
+      - name: "Scarlet acts first: forced tool call until she acts, never on models that reject it"
+        run: npm run -s test:act-first < /dev/null
+
+      - name: "Scarlet: chat is for small talk only; it refuses anything an agent could act on"
+        run: npm run -s test:chat < /dev/null
 
       - name: "Test runs are tagged [MOCK] in Slack, real runs never are"
         run: |

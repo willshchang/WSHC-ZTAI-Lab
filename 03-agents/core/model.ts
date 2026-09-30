@@ -14,6 +14,20 @@ import type { AgentPolicy, Block, ModelClient, ModelRequest, ModelTurn } from ".
 const DEFAULT_MODEL = "claude-haiku-4-5-20251001";
 
 // ------------------------------------------------------------
+// FORCED TOOL CALLS: an allowlist, not a denylist
+// ------------------------------------------------------------
+// tool_choice "any" makes the model call a tool instead of replying
+// in text. Anthropic's docs list models that reject it with a 400
+// (Opus 5.5, Sonnet 5.5, Fable 5.1, Mythos 5.1). WHY an allowlist:
+// an unknown or future model gets the safe default ("auto" plus the
+// loop's guard), so swapping models can never break a run. Add a
+// model here only after checking the docs.
+// https://platform.claude.com/docs/en/agents-and-tools/tool-use/define-tools
+// ------------------------------------------------------------
+const FORCED_TOOL_MODELS = [/^claude-haiku-4-5/];
+export const canForceTool = (model: string) => FORCED_TOOL_MODELS.some((re) => re.test(model));
+
+// ------------------------------------------------------------
 // ONE KEY PER AGENT, OR NO RUN
 // ------------------------------------------------------------
 // WHY: each agent reads only its own key (named in its policy).
@@ -34,13 +48,16 @@ export function createClaudeClient(policy: AgentPolicy): ModelClient {
   const model = process.env.ANTHROPIC_MODEL || DEFAULT_MODEL;
   const client = new Anthropic({ apiKey });
 
+  const forceable = canForceTool(model);
   return {
     label: model,
+    canForceTool: forceable,
     next: async (req: ModelRequest): Promise<ModelTurn> => {
       const response = await client.messages.create({
         model,
         max_tokens: 1024,
         system: req.system,
+        ...(req.mustUseTool && forceable ? { tool_choice: { type: "any" as const } } : {}),
         tools: req.tools.map((t) => ({
           name: t.name,
           description: t.description,
