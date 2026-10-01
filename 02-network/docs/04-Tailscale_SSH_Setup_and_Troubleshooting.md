@@ -30,7 +30,7 @@ often confused:
 
 | Layer | What it does | Tool |
 |---|---|---|
-| **Authentication** | Verifies WHO you are — no SSH keys needed | Tailscale identity (the admin's personal identity provider today; Entra SSO planned) |
+| **Authentication** | Verifies WHO you are, no SSH keys needed | Tailscale identity (the admin's personal identity provider today; Entra SSO planned) |
 | **Authorization** | Determines WHICH Linux user you log in as | Linux user account on destination VM |
 
 **Common misconception:**

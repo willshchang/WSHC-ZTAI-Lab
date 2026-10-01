@@ -165,8 +165,8 @@ node; exit nodes are the Apple TVs, see `subnet-routes.tf`) and
 `--accept-routes` (the ACL gives `tag:server` no access to the home 
 subnet).
 
-**Security — secret sprawl prevention:**
-The output is marked `sensitive = true` — never printed in plain 
+**Security: secret sprawl prevention:**
+The output is marked `sensitive = true`, so it is never printed in plain 
 text during `terraform plan` or `terraform apply`. Never paste the 
 key into a command line, a chat, or a committed file. In production, 
 store it in a secrets manager (Azure Key Vault, HashiCorp Vault) and 

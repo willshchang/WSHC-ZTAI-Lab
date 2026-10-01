@@ -344,7 +344,7 @@ terraform apply
 > role-assignable (`assignable_to_role` defaults to `false`). Only 
 > the static admin groups created from `entra_role_map` set 
 > `assignable_to_role = true`. This property cannot be added to an 
-> existing group — it must be set at creation time. To give a new 
+> existing group: it must be set at creation time. To give a new 
 > team a directory role, add the team to `entra_role_map`.
 >
 > Also add the new team to `data/teams.csv`: the ETL script rejects 

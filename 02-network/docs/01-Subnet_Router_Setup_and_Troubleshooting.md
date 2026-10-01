@@ -604,7 +604,7 @@ subnet for redundancy.
 - If primary goes offline → automatic failover to secondary
 - Clients require zero configuration changes
 
-**Lab HA test — verified results (historical):** run from the 
+**Lab HA test, verified results (historical):** run from the 
 Azure VM while the ACL still granted `tag:server` access to the home 
 subnet. That grant has since been removed, so the VM can no longer 
 reach `192.168.1.0/24`; run the test from an admin device instead.

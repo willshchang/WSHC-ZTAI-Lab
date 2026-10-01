@@ -489,7 +489,7 @@ for HTTPS termination.
 | Groups | Entra → Groups | 11+ groups (9 TinyCo dynamic + admin static groups) |
 | Enterprise Apps | Entra → Enterprise Applications | 14 TinyCo apps visible |
 | Conditional Access | Entra → Security → Conditional Access | 2 policies active |
-| RBAC — ITOps | Entra → Roles | TinyCo-ITOps-Admins (Static): Global Administrator |
+| RBAC: ITOps | Entra → Roles | TinyCo-ITOps-Admins (Static): Global Administrator |
 | RBAC: Security | Entra → Roles | TinyCo-Security-Admins (Static): Security Reader |
 | Break-glass | Entra → Roles → Global Administrator | Break-glass user listed as a direct, active assignment |
 | App assignment | Enterprise Applications → app → Properties | Assignment required? = Yes |

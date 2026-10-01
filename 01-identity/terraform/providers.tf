@@ -13,6 +13,9 @@
 # tenant by changing terraform.tfvars.
 
 terraform {
+  # check blocks need 1.5, terraform_data needs 1.4
+  required_version = ">= 1.5.0"
+
   required_providers {
     azuread = {
       source  = "hashicorp/azuread"

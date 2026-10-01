@@ -125,11 +125,18 @@ variable "ssh_root_check_period" {
   type        = string
   default     = "12h"
 
-  # Tailscale accepts 1 minute to 168 hours (one week).
-  # https://tailscale.com/docs/reference/syntax/policy-file#ssh
+  # Tailscale accepts 1 minute to 168 hours (one week), or "always"
+  # for a check on every connection.
+  # https://tailscale.com/docs/reference/syntax/policy-file
+  # Each try() stands alone because Terraform's || does not skip the
+  # right-hand side: tonumber("12h") would otherwise error.
   validation {
-    condition     = can(regex("^[0-9]+(m|h)$", var.ssh_root_check_period))
-    error_message = "ssh_root_check_period must be a number of minutes or hours, such as 30m or 12h (Tailscale allows 1m to 168h)."
+    condition = (
+      var.ssh_root_check_period == "always" ||
+      try(tonumber(regex("^([0-9]+)m$", var.ssh_root_check_period)[0]) >= 1 && tonumber(regex("^([0-9]+)m$", var.ssh_root_check_period)[0]) <= 10080, false) ||
+      try(tonumber(regex("^([0-9]+)h$", var.ssh_root_check_period)[0]) >= 1 && tonumber(regex("^([0-9]+)h$", var.ssh_root_check_period)[0]) <= 168, false)
+    )
+    error_message = "ssh_root_check_period must be \"always\" or 1m to 168h, such as 30m or 12h."
   }
 }
 

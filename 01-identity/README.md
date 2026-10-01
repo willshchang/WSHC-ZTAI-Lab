@@ -126,7 +126,7 @@ From HR data to app access — fully automated:
 No employee names or company data exists in any `.tf` file, and the 
 only team name in code is the admin team (`local.admin_team = "ITOps"` 
 in `groups.tf`, which `entra_role_map` is validated against). All 
-identity data flows from gitignored CSV files — mirroring 
+identity data flows from gitignored CSV files, mirroring 
 a production HR system SCIM feed. Swap the CSV and the entire 
 codebase deploys for any organisation.
 
@@ -186,6 +186,22 @@ E3/E5 and Business Premium):
 feature flag that skips or replaces the P1-only resources when the 
 tenant has no P1, so `terraform plan` on a Free tenant stays clean.
 
+### Applying the hardened code to a Free tenant
+
+The code is written for a P1/P2 tenant. Applying it to today's Free 
+tenant has side effects that a P1 tenant would not have:
+
+| Change | On P1 | On the current Free tenant | What to do |
+|---|---|---|---|
+| Break-glass loses its `department` | Leaves the dynamic ITOps group, its 4 app assignments and the ITOps Azure role | Membership rules are frozen, so it most likely **stays** in `TinyCo-ITOps` | Check its membership after apply. Removing it needs P1 again, or converting the group to static (a design change, not done here) |
+| `app_role_assignment_required = true` on Mattermost, Tableau and Elastic | Only assigned groups get a token | Group assignment is not licensed. Anyone not assigned directly loses SSO: hires added after the trial, every user the JML agent creates (no `department`, and the JML groups have no app assignments), and the primary admin unless their department matches a team | Before apply, assign those users directly to each app (works on Free), or hold these three changes. The 10 stub apps are safe |
+| `entra_role_map["Security"]` corrected to Security Reader | The role assignment is replaced | Replace means destroy, then create on a role-assignable group (P1). The create may fail after the old Helpdesk Administrator role is already removed. Fail-safe, but noisy | Change it in its own apply, after everything else |
+
+`prevent_destroy` on the break-glass account also means a full 
+`terraform destroy` of the lab now fails on purpose. To tear the lab 
+down, remove that `lifecycle` block in a deliberate, reviewed commit 
+first.
+
 ---
 
 ## Documentation Guide
@@ -208,7 +224,7 @@ tenant has no P1, so `terraform plan` on a Free tenant stays clean.
 - `terraform.tfvars` is gitignored — all secrets stay local
 - SSH port 22 is closed to the public internet — VM accessible via Tailscale only
 - SAML apps require an app role assignment (`app_role_assignment_required = true`), so unassigned users and guests cannot get a token. Group-based assignment needs Entra ID P1 (see [Licensing](#licensing-what-needs-entra-id-p1))
-- Break-glass account: own password, no department (not in any team group), permanent active Global Administrator, protected by `prevent_destroy`. See [02-security-model.md](./docs/admin/02-security-model.md#break-glass-account) for the manual steps (FIDO2 passkey or certificate-based auth, sign-in alert)
+- Break-glass account: own password, no department (so no dynamic team group on a P1 tenant; on Free see [Applying to a Free tenant](#applying-the-hardened-code-to-a-free-tenant)), permanent active Global Administrator, protected by `prevent_destroy`. See [02-security-model.md](./docs/admin/02-security-model.md#break-glass-account) for the manual steps (FIDO2 passkey or certificate-based auth, sign-in alert)
 
 ---
 

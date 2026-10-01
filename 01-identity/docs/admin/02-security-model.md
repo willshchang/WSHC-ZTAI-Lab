@@ -272,7 +272,7 @@ tenant permanently.
 | Control | Implementation | Why |
 |---|---|---|
 | Own password | `password = var.breakglass_password`, validated to 16+ characters and different from `admin_password` | The shared employee initial password is known to everyone onboarded with it |
-| Not in any team group | No `department` attribute | The dynamic team groups match on `department`. With `ITOps` it was in the ITOps group and got every SSO app plus the ITOps Azure roles |
+| Not in any team group | No `department` attribute | The dynamic team groups match on `department`. With `ITOps` it was in the ITOps group and got every SSO app plus the ITOps Azure roles. On a Free tenant the membership rules are frozen, so check that it actually left the group (see the identity README, "Applying the hardened code to a Free tenant") |
 | Global Administrator, permanent and active | `azuread_directory_role_assignment.breakglass_global_admin` (template `62e90394-69f5-4237-9190-012177145e10`) directly on the user | Microsoft: assign Global Administrator to emergency accounts as permanent active, not PIM-eligible, and not through a group that could be changed or misconfigured |
 | Cannot be deleted by a bad plan | `lifecycle { prevent_destroy = true }` | A plan that would destroy the account fails instead |
 | Excluded from CA | Member of `Security-Exclusion-Emergency` (`groups.tf`) | A CA policy that blocks or restricts sign-in must not apply during the exact emergency the account exists for |

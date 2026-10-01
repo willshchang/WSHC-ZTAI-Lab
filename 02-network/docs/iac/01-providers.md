@@ -42,9 +42,11 @@ tailscale = {
 ```
 
 `.terraform.lock.hcl` pins provider **0.28.0**. The lock file still 
-records the old constraint string (`~> 0.17`); run `terraform init` 
-locally once and commit the updated lock file so the recorded 
-constraint matches. The pinned version does not change.
+records the old constraint string (`~> 0.17`). That is cosmetic: 
+0.28.0 already satisfies `~> 0.28`, so nothing breaks. As optional 
+housekeeping, run plain `terraform init` (not `-upgrade`) once and 
+commit the lock file so the recorded string matches. The pinned 
+version does not change.
 
 ---
 
