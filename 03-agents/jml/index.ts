@@ -12,7 +12,8 @@
 
 import { resetMockTenant } from "./graph.ts";
 import { runJml } from "./agent.ts";
-import { loadHrEvents } from "./planner.ts";
+import { HR_EVENT_ID, loadHrEvents } from "./planner.ts";
+import { jmlTask } from "./policy.ts";
 
 const args = process.argv.slice(2);
 const flag = (name: string) => args.includes(`--${name}`);
@@ -34,7 +35,7 @@ if (flag("list")) {
 }
 
 const eventId = value("event");
-if (!eventId || !/^hr-\d{4}$/.test(eventId)) {
+if (!eventId || !HR_EVENT_ID.test(eventId)) {
   console.error("Give an event, e.g. --event hr-1001 (see --list).");
   process.exit(1);
 }
@@ -45,7 +46,11 @@ if (graphArg !== "mock" && graphArg !== "real") {
 }
 
 try {
-  await runJml({ task: `Process HR event. event_id: ${eventId}`, mock: flag("mock"), graph: graphArg });
+  // The --event value is the one event this run may touch
+  const result = await runJml({ task: jmlTask(eventId), mock: flag("mock"), graph: graphArg });
+  // An error, or a status card that failed to post, is never a quiet success
+  for (const w of result.warnings) console.error(`❗ ${w}`);
+  if (result.outcome === "error" || result.warnings.length > 0) process.exitCode = 1;
 } catch (err) {
   // e.g. a missing key, missing tenant config or credentials: refuse clearly
   console.error(`\n⛔ ${err instanceof Error ? err.message : String(err)}\n`);

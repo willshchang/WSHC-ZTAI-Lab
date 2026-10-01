@@ -14,10 +14,14 @@
 //
 // Risk tier: internal-write (our own channel). Runs without
 // approval, always traced. Never contains a password.
+//
+// Names, teams, emails, refusal reasons and Graph error messages come
+// from HR data or the tenant, so each is escaped for Slack (a display
+// name of "<!channel>" must not ping anyone) and capped in length.
 // ============================================================
 
 import { userInfo } from "node:os";
-import { MOCK_TAG, postToSlack, type SlackResult } from "../core/slack.ts";
+import { escapeSlack, MOCK_TAG, postToSlack, type SlackResult } from "../core/slack.ts";
 import type { ApplyResult, HrEvent, Plan } from "./planner.ts";
 
 export type Outcome =
@@ -50,44 +54,45 @@ export function formatStatus(
   ctx: { mock: boolean; runId: string },
 ): string {
   const t = TYPE[event.type];
-  const who = `*${event.displayName}*`;
+  const e = (text: string, max = 200) => escapeSlack(text, max);
+  const who = `*${e(event.displayName, 120)}*`;
   const mock = ctx.mock ? MOCK_TAG : "";
-  const team = event.team ? `  |  *Team:* ${event.team}` : "";
-  const when = event.effective ? `  |  *Effective:* ${event.effective}` : "";
-  const footer = `\n*HR event:* ${event.id}  |  *Trace:* \`${ctx.runId}\``;
+  const team = event.team ? `  |  *Team:* ${e(event.team, 80)}` : "";
+  const when = event.effective ? `  |  *Effective:* ${e(event.effective, 40)}` : "";
+  const footer = `\n*HR event:* ${e(event.id, 16)}  |  *Trace:* \`${ctx.runId}\``;
 
   const person = (plan: Plan) =>
-    `*Email:* ${plan.target.upn}  |  *Object ID:* \`${plan.target.objectId ?? "new"}\`${team}${when}`;
+    `*Email:* ${e(plan.target.upn, 200)}  |  *Object ID:* \`${e(plan.target.objectId ?? "new", 64)}\`${team}${when}`;
 
   switch (outcome.kind) {
     case "applied": {
       const r = outcome.result;
-      const done = r.completed.map((s) => `:white_check_mark: ${s}`).join("\n");
+      const done = r.completed.map((s) => `:white_check_mark: ${e(s)}`).join("\n");
       // Steps already true in the tenant (a rerun, or Entra catching up):
       // shown in their own section, never as a change, never hidden
-      const already = (r.unchanged ?? []).map((s) => `:heavy_equals_sign: ${s}`).join("\n");
+      const already = (r.unchanged ?? []).map((s) => `:heavy_equals_sign: ${e(s)}`).join("\n");
       const alreadySection = already ? `\n*Already done (no change needed):*\n${already}` : "";
       if (!r.failed) {
         return (
           `${mock}:large_green_circle: ${t.icon} *${t.label} complete:* ${who}\n` +
           `${person({ ...outcome.plan, target: { ...outcome.plan.target, objectId: r.objectId } })}\n` +
           `*What changed:*\n${done || "(nothing, everything was already done)"}${alreadySection}\n` +
-          `*Approved by:* ${approver()} (terminal)${footer}`
+          `*Approved by:* ${e(approver(), 64)} (terminal)${footer}`
         );
       }
-      const failed = `:x: ${r.failed.step} (${r.failed.error})`;
-      const notDone = r.notDone.map((s) => `:double_vertical_bar: ${s} (not done)`).join("\n");
+      const failed = `:x: ${e(r.failed.step)} (${e(r.failed.error, 400)})`;
+      const notDone = r.notDone.map((s) => `:double_vertical_bar: ${e(s)} (not done)`).join("\n");
       return (
         `${mock}:warning: ${t.icon} *${t.label} only partly done:* ${who}\n` +
         `${person(outcome.plan)}\n` +
         `*What changed:*\n${done || "(nothing)"}${alreadySection}\n${failed}${notDone ? `\n${notDone}` : ""}\n` +
-        `*Needs a human to finish.* Approved by: ${approver()} (terminal)${footer}`
+        `*Needs a human to finish.* Approved by: ${e(approver(), 64)} (terminal)${footer}`
       );
     }
     case "refused":
       return (
         `${mock}:no_entry: ${t.icon} *${t.label} refused:* ${who}\n` +
-        `*Why:* ${outcome.reason}\nNothing was changed.${footer}`
+        `*Why:* ${e(outcome.reason, 400)}\nNothing was changed.${footer}`
       );
     case "nothing":
       return (
