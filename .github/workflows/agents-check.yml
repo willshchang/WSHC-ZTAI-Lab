@@ -4,10 +4,10 @@
 # Runs on every push and pull request that touches 03-agents/.
 #
 # What this pipeline checks:
-# 1. typecheck   — the TypeScript compiles with strict settings
-# 2. npm test    — typecheck plus every test:* script
-# 3. smoke tests — each demo scenario runs end to end in mock
-#                  mode (no API key, no secrets needed)
+# 1. typecheck:   the TypeScript compiles with strict settings
+# 2. npm test:    typecheck plus every test:* script
+# 3. smoke tests: each demo scenario runs end to end in mock
+#                 mode (no API key, no secrets needed)
 #
 # Why the smoke tests prove safety, not just "it runs":
 # CI has no interactive terminal, so every external write hits
