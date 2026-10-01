@@ -18,12 +18,13 @@ import { createHash } from "node:crypto";
 import { statSync } from "node:fs";
 import { dirname } from "node:path";
 import { runAgent, RETRY_MAX_TOKENS } from "../core/agent.ts";
+import { makeFrictionTool } from "../core/friction.ts";
 import { forTerminal, hasControlChars } from "../core/sanitize.ts";
 import { Trace } from "../core/trace.ts";
 import type { AgentPolicy, AgentTool, ToolContext } from "../core/types.ts";
 import { DEFAULT_MAX_STRING, validateInput } from "../core/validate.ts";
 import { scarletPolicy } from "../scarlet/policy.ts";
-import { capture, check, done, noHuman, ofType, say, scriptHuman, scriptedModel, traceLines, use } from "./helpers.ts";
+import { capture, check, done, noHuman, ofType, rejection, say, scriptHuman, scriptedModel, traceLines, use } from "./helpers.ts";
 
 delete process.env.SLACK_WEBHOOK_AGENT_FEEDBACK;
 const sha256 = (t: string) => createHash("sha256").update(t, "utf8").digest("hex");
@@ -225,6 +226,22 @@ noHuman();
     check((statSync(t.file).mode & 0o777) === 0o600, "trace files are owner read/write only (0600)");
     check((statSync(dirname(t.file)).mode & 0o777) === 0o700, "the trace folder is owner only (0700)");
   }
+}
+
+// ---- A5: friction reports can't ping a channel or hide a link -------
+{
+  const friction = makeFrictionTool();
+  const ctx = { policy, trace: new Trace("agent-test"), mock: false };
+  const out = await capture(() => friction.run({
+    category: "missing_data", task: "<!here> look", expected: "a & b", actual: "<https://evil.example|safe link>",
+    wrong_approach: "<!channel>", evidence: "x".repeat(5000),
+  }, ctx));
+  const posted = out.split("Would post to #agent-feedback:\n")[1] ?? "";
+  check(posted.length > 0 && !/<!|<https/.test(posted) && posted.includes("&lt;!here&gt;") && posted.includes("a &amp; b"),
+    "every friction field is escaped for Slack (no <!here>, no disguised links)");
+  check(!posted.includes("x".repeat(1600)) && posted.includes("(truncated)"), "a very long field is capped");
+  check(/category must be one of/.test(await rejection(() => friction.run({ category: "vip", task: "t", expected: "e", actual: "a", evidence: "v" }, ctx))),
+    "the friction tool checks its input at runtime, not by cast");
 }
 
 // ---- The real coordinator policy still finishes cleanly -------------
