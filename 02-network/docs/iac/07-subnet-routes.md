@@ -70,9 +70,13 @@ Both routers share one route set, defined once in `locals`
 - Failover time: ~15 seconds
 - Zero client reconfiguration needed
 
-**Verified in lab:**
+**Verified in lab (historical):**
 Disabled primary route → pinged `192.168.1.1` from Azure VM 
 → 4/4 packets received via HA router. Failover confirmed ~5 seconds.
+This test ran while the ACL still granted `tag:server` access to the 
+home subnet. That grant has been removed, so repeat the test from an 
+admin device such as the Windows PC (Windows and macOS accept subnet 
+routes automatically; Linux needs `sudo tailscale set --accept-routes`).
 
 ---
 

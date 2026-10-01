@@ -50,15 +50,15 @@ terraform {
 # To create OAuth credentials:
 # 1. Go to tailscale.com/admin/settings/oauth
 # 2. Create new OAuth client
-# 3. Grant these scopes, all Write (console label = API scope):
-#    - Devices > Core = devices:core
-#        tags: tag:server, tag:subnet-router, tag:terraform
-#    - Devices > Routes = devices:routes
-#    - General > Policy File = policy_file
-#    - General > DNS = dns
-#    - Keys > Auth Keys = auth_keys
-#        tags: tag:server
-#    - Settings > Networking Settings (used by tailnet_settings.tf)
+# 3. Grant these scopes, all Write (same list as
+#    docs/iac/01-providers.md):
+#    - Devices > Core                         (devices:core)
+#    - Devices > Tags: tag:server, tag:subnet-router, tag:terraform
+#    - Devices > Routes                       (devices:routes)
+#    - General > Policy File                  (policy_file)
+#    - General > DNS                          (dns)
+#    - Keys > Auth Keys: tag:server           (auth_keys)
+#    - Settings > Networking Settings         (tailnet_settings.tf)
 #    Scope reference: https://tailscale.com/kb/1623/trust-credentials
 #    (policy_file also needs devices:posture_attributes and
 #    devices:core:read)

@@ -32,6 +32,22 @@ tokens. API keys are tied to a user account and expire after 90 days.
 
 ---
 
+## Version Constraint
+
+```hcl
+tailscale = {
+  source  = "tailscale/tailscale"
+  version = "~> 0.28"
+}
+```
+
+`.terraform.lock.hcl` pins provider **0.28.0**. The lock file still 
+records the old constraint string (`~> 0.17`); run `terraform init` 
+locally once and commit the updated lock file so the recorded 
+constraint matches. The pinned version does not change.
+
+---
+
 ## Creating the OAuth Client
 
 1. Go to **tailscale.com/admin/settings/oauth**
@@ -44,6 +60,15 @@ tokens. API keys are tied to a user account and expire after 90 days.
    - General → DNS
    - Keys → Auth Keys: `tag:server`
    - Settings → Networking Settings
+   
+   API scope names from [Trust credentials](https://tailscale.com/kb/1623/trust-credentials): 
+   Devices → Core = `devices:core` (tags required), Devices → Routes = 
+   `devices:routes`, General → Policy File = `policy_file` (needs 
+   `devices:posture_attributes` and `devices:core:read`), General → 
+   DNS = `dns`, Keys → Auth Keys = `auth_keys` (tags required). The 
+   Settings scope is the one this lab's client was created with for 
+   `tailnet_settings.tf`; the closest name in the current scope list 
+   is `feature_settings`.
 4. Click **Generate credential**
 5. **Copy both Client ID and Secret immediately** — secret shown once only
 

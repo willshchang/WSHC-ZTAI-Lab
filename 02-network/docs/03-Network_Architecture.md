@@ -11,7 +11,7 @@
 ```mermaid
 %%{init: {"flowchart": {"htmlLabels": false}}}%%
 flowchart TB
-    eng["Engineer devices<br/>signed in via Entra ID"]
+    eng["Engineer devices<br/>admin's Tailscale login"]
 
     subgraph A["Site A · Azure cloud"]
         vm["tinyco-vm (Ubuntu)<br/>tag:server<br/>Tailscale SSH only"]
@@ -26,20 +26,21 @@ flowchart TB
 
     eng -->|"SSH as your identity"| vm
     eng -->|"home subnet"| r1
-    vm -->|"home subnet"| r1
     eng -.->|"exit node, when on"| r1
     r1 --> lan
     r2 -.->|"takes over on failure"| lan
 ```
 
 Each labelled solid arrow is a grant in `acl.tf`; anything not granted is blocked.
+The Azure VM has no outbound grant: deny tests prove it cannot reach the home
+subnet or the subnet routers.
 
 ## Overview
 
 This document describes the full Zero Trust network architecture 
 implemented in the WSHC lab — covering the Tailscale network 
-layer, site-to-site topology, ACL policy design, and how it 
-mirrors the Entra ID identity model.
+layer, site-to-site topology, ACL policy design, and how it is 
+meant to line up with the Entra ID identity model.
 
 For setup and troubleshooting procedures, see:
 - [01-Subnet_Router_Setup_and_Troubleshooting.md](./01-Subnet_Router_Setup_and_Troubleshooting.md)
@@ -57,10 +58,16 @@ independent layers:
 | **Identity** | Microsoft Entra ID | Who can authenticate · SSO · MFA · RBAC |
 | **Network** | Tailscale ACL | What authenticated devices can reach |
 
-Neither layer trusts the other implicitly. A user must pass 
-both identity verification (Entra ID → Tailscale SSO) AND 
-network access control (Tailscale ACL policy) before reaching 
-any resource.
+Neither layer trusts the other implicitly. In the target design a 
+user must pass both identity verification (Entra ID → Tailscale 
+SSO) AND network access control (Tailscale ACL policy) before 
+reaching any resource.
+
+> **Current state:** the tailnet admin signs in to Tailscale with a 
+> personal identity provider, not Entra ID, so Entra Conditional 
+> Access and MFA do not gate the tailnet yet. The ACL layer is fully 
+> in force. Moving the tailnet to Entra ID as its identity provider 
+> is a planned step.
 
 ---
 
@@ -315,7 +322,7 @@ Weaknesses:
 - No audit trail in Tailscale
 
 ### After Tailscale SSH
-Engineer → Tailscale identity (Entra SSO) → ACL validates →
+Engineer → Tailscale identity (admin's Tailscale login today; Entra SSO planned) → ACL validates →
 Tailscale intercepts SSH → VM (no open ports)
 
 Improvements:
@@ -323,9 +330,10 @@ Improvements:
 - Authentication via Tailscale identity — no password
 - ACL policy controls who can SSH to what
 - Full SSH session audit trail in Tailscale admin console
-- Browser-based re-authentication available (`action: check`)
+- Browser-based re-authentication for root (`action: check`, 
+  `checkPeriod` 12h by default)
 
-### SSH ACL Rule
+### SSH ACL Rules
 
 ```json
 "ssh": [
@@ -333,7 +341,14 @@ Improvements:
         "action": "accept",
         "src":    ["admin@example.com"],
         "dst":    ["tag:server"],
-        "users":  ["tinyco-admin", "<linux-user>", "root"]
+        "users":  ["tinyco-admin", "<linux-user>"]
+    },
+    {
+        "action":      "check",
+        "src":         ["admin@example.com"],
+        "dst":         ["tag:server"],
+        "users":       ["root"],
+        "checkPeriod": "12h"
     }
 ]
 ```
@@ -341,6 +356,12 @@ Improvements:
 ---
 
 ## Site-to-Site Architecture
+
+> **Historical:** the VM-to-home-LAN path below was built and 
+> verified, then closed. The ACL no longer grants `tag:server` 
+> access to `192.168.1.0/24`, and a deny test proves it. The same 
+> subnet routers still carry the admin devices' traffic to the 
+> home LAN.
 
 ### How it works
 Azure VM (Site A, 100.x.y.10)
@@ -383,10 +404,11 @@ via ethernet). If primary goes offline, Tailscale automatically
 fails over to `tv-ha` — zero client configuration 
 required.
 
-**HA failover verified:**
+**HA failover verified (historical, before the VM grant was removed):**
 Disabled primary subnet route in admin console → pinged 
 `192.168.1.1` from Azure VM → 4/4 packets received via 
-secondary Apple TV. Failover time: ~5 seconds.
+secondary Apple TV. Failover time: ~5 seconds. Repeat the test 
+from an admin device today.
 
 **Verify active primary:**
 ```bash
@@ -407,8 +429,9 @@ for peer in data.get('Peer',{}).values():
 ### Design principle
 
 > Identity drives access, tags define infrastructure roles. 
-> ACL rules mirror the Entra ID RBAC model — one source of 
-> truth for roles, two enforcement layers.
+> The ACL is designed to line up with the Entra ID RBAC model, so 
+> one set of roles can be enforced at two layers. Until the tailnet 
+> signs in through Entra ID, the mapping is by design only.
 
 ### Tag model
 
@@ -417,8 +440,9 @@ for peer in data.get('Peer',{}).values():
 | `tag:server` | `tinyco-vm` | Cloud infrastructure |
 | `tag:subnet-router` | Both Apple TVs | Network infrastructure |
 
-User devices carry no tags — identified by Tailscale identity 
-(`admin@example.com`) which maps back to Entra ID via SSO.
+User devices carry no tags. They are identified by the admin's 
+Tailscale login (`admin@example.com`), which today comes from a 
+personal identity provider, not Entra ID.
 
 ### Access matrix
 
@@ -427,7 +451,9 @@ User devices carry no tags — identified by Tailscale identity
 | `admin@example.com` | `tag:server` | ✅ Full |
 | `admin@example.com` | `tag:subnet-router` | ✅ Full |
 | `admin@example.com` | `192.168.1.0/24` | ✅ Full |
-| `tag:server` | `192.168.1.0/24` | ✅ Full |
+| `admin@example.com` | `autogroup:internet` (exit nodes) | ✅ Full |
+| `tag:server` | `192.168.1.0/24` | ❌ Blocked (implicit deny, deny-tested) |
+| `tag:server` | `tag:subnet-router` | ❌ Blocked (implicit deny, deny-tested) |
 | `tag:server` | user devices | ❌ Blocked (implicit deny) |
 | `tag:subnet-router` | anywhere | ❌ Blocked (implicit deny) |
 | anything else | anything else | ❌ Blocked (implicit deny) |
@@ -486,6 +512,10 @@ consent.
 ## Production Enhancements
 
 ### Terraform IaC for ACL policy
+
+Implemented: the live policy is managed by `terraform/acl.tf` (see 
+[iac/03-acl.md](./iac/03-acl.md)). The minimal sketch below shows 
+the starting shape only.
 
 ```hcl
 resource "tailscale_acl" "policy" {

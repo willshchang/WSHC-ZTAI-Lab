@@ -17,8 +17,18 @@ access rules, and test validation.
 
 **Core design principle:**
 > Identity drives access, tags define infrastructure roles. 
-> ACL rules mirror the Entra ID RBAC model — one source of 
-> truth for roles, two enforcement layers (identity + network).
+> The ACL is designed to line up with the Entra ID RBAC model, so 
+> one set of roles can be enforced at two layers (identity + network).
+
+**Current state:** the ACL has one human identity, the admin's 
+Tailscale login (`admin@example.com` here), which signs in with a 
+personal identity provider, not Entra ID. So the ACL does not 
+consume Entra groups yet, and Entra CA and MFA do not gate the 
+tailnet. Moving the tailnet to Entra ID as its identity provider, 
+and syncing Entra groups with SCIM 
+([available on Standard, Premium and Enterprise](https://tailscale.com/kb/1249/sso-entra-id-scim)), 
+is the planned step that makes the "two layers, one model" design 
+real.
 
 ---
 
@@ -33,8 +43,8 @@ environment.
 Any device → Any device = full access
 
 **With ACLs (least privilege):**
-ITOps identity → Infrastructure only
-Infrastructure → Home LAN only
+ITOps identity → Infrastructure, home LAN, exit nodes
+Infrastructure → nothing (no outbound grants)
 Everything else → Blocked by default
 
 ACLs are the network enforcement layer that complements 
@@ -42,20 +52,21 @@ Entra ID's identity enforcement layer:
 
 | Layer | Tool | What it enforces |
 |---|---|---|
-| Identity | Microsoft Entra ID | Who can authenticate and join the Tailnet |
+| Identity | Tailscale sign-in (personal identity provider today; Entra ID planned) | Who can authenticate and join the Tailnet |
 | Network | Tailscale ACL | What authenticated devices can reach |
 
 ---
 
 ## ACL vs Entra ID — Two Layers, One Model
 
-The Tailscale ACL policy mirrors the Entra ID RBAC model 
-designed in this lab:
+The Tailscale ACL policy is designed to line up with the Entra ID 
+RBAC model in this lab. Today the mapping is by intent only, because 
+the tailnet does not sign in through Entra ID yet:
 
 | Entra ID Role | Tailscale ACL Identity | Access |
 |---|---|---|
-| Global Administrator (ITOps) | `admin@example.com` | Full infrastructure access |
-| Infrastructure device | `tag:server` | Subnet access only |
+| Global Administrator (ITOps) | `admin@example.com` (admin's Tailscale login) | Full infrastructure access |
+| Infrastructure device | `tag:server` | No outbound access (deny-tested) |
 | Network device | `tag:subnet-router` | Routes traffic, no direct access |
 
 In a production multi-user tailnet, Entra ID groups would map 
@@ -199,84 +210,108 @@ yourself out. Requires `hostname:port` format:
         "src":    "admin@example.com",
         "accept": ["tag:server:22", "tag:subnet-router:80"],
         "deny":   []
+    },
+    {
+        "src":    "tag:server",
+        "accept": [],
+        "deny":   ["192.168.1.1:80", "tag:subnet-router:22"]
     }
 ]
 ```
+
+Accept tests guard against lockout. Deny tests guard the implicit 
+denies: a later grant that opens one of those paths fails the save 
+until the test is changed on purpose. A tag can be a test `src`.
+
+### `sshTests`
+The same idea for SSH rules: `accept` lists users reachable without 
+re-authentication, `check` lists users that need a recent browser 
+check, `deny` lists users that must be refused.
 
 ---
 
 ## Full ACL Policy
 
+This is the policy `acl.tf` produces, rendered with the example 
+values from `terraform.tfvars.example` (`admin@example.com`, 
+`192.168.1.0/24`, `ssh_users = ["tinyco-admin", "<linux-user>"]`). 
+`jsonencode` sorts keys alphabetically; comments are added here for 
+reading only.
+
 ```json
 {
-  // ============================================================
-  // WSHC Entra IaC Zero Trust Lab — Tailscale ACL Policy
-  // Author: Will Chang
-  // Last Updated: April 2026
-  //
-  // Design principle: Role-based access control mirroring
-  // Entra ID group structure. User identity drives access,
-  // tags define infrastructure roles.
-  // ============================================================
-
-  "tagOwners": {
-    "tag:server":        ["admin@example.com"],
-    "tag:subnet-router": ["admin@example.com"]
-  },
-
+  // Admin devices: full access to infrastructure, home LAN and exit nodes
   "grants": [
-    // ITOps Engineer — full access to cloud infrastructure
-    // Mirrors: TinyCo-ITOps → Global Administrator in Entra
-    {
-      "src": ["admin@example.com"],
-      "dst": ["tag:server"],
-      "ip":  ["*"]
-    },
-    // ITOps Engineer — full access to subnet router devices
-    {
-      "src": ["admin@example.com"],
-      "dst": ["tag:subnet-router"],
-      "ip":  ["*"]
-    },
-    // ITOps Engineer — access to home LAN via subnet router
-    {
-      "src": ["admin@example.com"],
-      "dst": ["192.168.1.0/24"],
-      "ip":  ["*"]
-    },
-    // Cloud server → home LAN access
-    // Azure VM can reach home subnet via Apple TV subnet router
-    {
-      "src": ["tag:server"],
-      "dst": ["192.168.1.0/24"],
-      "ip":  ["*"]
-    }
-    // IMPLICIT DENIES (Tailscale default — not written):
-    // tag:server → user devices = BLOCKED
-    // tag:subnet-router → anywhere = BLOCKED
-    // Any unlisted src/dst = BLOCKED
+    { "src": ["admin@example.com"], "dst": ["tag:server"],         "ip": ["*"] },
+    { "src": ["admin@example.com"], "dst": ["tag:subnet-router"],  "ip": ["*"] },
+    { "src": ["admin@example.com"], "dst": ["192.168.1.0/24"],     "ip": ["*"] },
+    { "src": ["admin@example.com"], "dst": ["autogroup:internet"], "ip": ["*"] }
+    // No grant for tag:server: the internet-facing VM reaches nothing.
+    // IMPLICIT DENIES (proven by the deny tests below):
+    // tag:server        → home subnet       = BLOCKED
+    // tag:server        → tag:subnet-router = BLOCKED
+    // tag:subnet-router → tag:server        = BLOCKED
   ],
 
   "ssh": [
-    // ITOps Engineer SSH to cloud server
-    // Identity-verified — no passwords, browser auth
+    // Everyday users: no extra prompt
     {
       "action": "accept",
       "src":    ["admin@example.com"],
       "dst":    ["tag:server"],
-      "users":  ["tinyco-admin", "<linux-user>", "root"]
+      "users":  ["tinyco-admin", "<linux-user>"]
+    },
+    // Root: browser re-authentication if the last check is older than 12h
+    {
+      "action":      "check",
+      "src":         ["admin@example.com"],
+      "dst":         ["tag:server"],
+      "users":       ["root"],
+      "checkPeriod": "12h"
     }
   ],
+
+  "sshTests": [
+    {
+      "src":    "admin@example.com",
+      "dst":    ["tag:server"],
+      "accept": ["tinyco-admin", "<linux-user>"],
+      "check":  ["root"]
+    }
+  ],
+
+  "tagOwners": {
+    "tag:server":        ["tag:terraform"],
+    "tag:subnet-router": ["tag:terraform"],
+    "tag:terraform":     ["admin@example.com"]
+  },
 
   "tests": [
     {
       "src":    "admin@example.com",
       "accept": ["tag:server:22", "tag:subnet-router:80", "192.168.1.1:80"],
       "deny":   []
+    },
+    {
+      "src":    "tag:server",
+      "accept": [],
+      "deny":   ["192.168.1.1:80", "192.168.1.1:22", "tag:subnet-router:22"]
+    },
+    {
+      "src":    "tag:subnet-router",
+      "accept": [],
+      "deny":   ["tag:server:22"]
     }
   ]
 }
 ```
+
+> **History:** the first hand-written policy (April 2026) let 
+> `admin@example.com` own the tags directly, granted `tag:server` → 
+> `192.168.1.0/24` on all ports, allowed root through the `accept` 
+> SSH rule, and had accept tests only. All four were changed: tags 
+> are owned through `tag:terraform`, the VM grant was removed, root 
+> uses `check`, and deny tests guard the implicit denies.
 
 ---
 
@@ -347,9 +382,15 @@ Welcome to Ubuntu 24.04.4 LTS (GNU/Linux 6.17.0-1010-azure x86_64)
 
 ---
 
-### Site-to-Site Subnet Routing Under ACL
+### Site-to-Site Subnet Routing Under ACL (historical)
 
-After ACL policy applied, Azure VM successfully reaches 
+> **Historical record.** These pings ran from the Azure VM while the 
+> policy still granted `tag:server` → `192.168.1.0/24`. That grant 
+> has been removed and a deny test now proves the VM cannot reach 
+> the home subnet. To check subnet routing today, run the same pings 
+> from an admin device.
+
+After ACL policy applied, Azure VM successfully reached 
 home LAN devices via Apple TV subnet router:
 
 ```bash
@@ -415,7 +456,14 @@ rule is missing from the policy.
         "action": "accept",
         "src":    ["admin@example.com"],
         "dst":    ["tag:server"],
-        "users":  ["tinyco-admin", "<linux-user>", "root"]
+        "users":  ["tinyco-admin", "<linux-user>"]
+    },
+    {
+        "action":      "check",
+        "src":         ["admin@example.com"],
+        "dst":         ["tag:server"],
+        "users":       ["root"],
+        "checkPeriod": "12h"
     }
 ]
 ```
@@ -666,10 +714,13 @@ You don't write deny rules — Tailscale denies everything
 not explicitly permitted. This is the correct Zero Trust 
 default.
 
-**5. ACL and Entra ID should mirror each other**
+**5. ACL and Entra ID should mirror each other (planned)**
 Same roles, same access model, two enforcement layers. 
 If a user loses their Entra group, they should lose Tailscale 
-access too. Design both systems together.
+access too. That only happens automatically once the tailnet signs 
+in through Entra ID and syncs groups with SCIM. Until then, 
+offboarding in Tailscale is a manual admin console step 
+([employee onboarding and offboarding](https://tailscale.com/docs/use-cases/vpn-replacement/employee-onboarding-offboarding)).
 
 ---
 

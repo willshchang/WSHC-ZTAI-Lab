@@ -7,9 +7,10 @@
 # How to get OAuth credentials:
 # 1. Go to tailscale.com/admin/settings/oauth
 # 2. Create new OAuth client with these scopes, all Write:
-#    Devices > Core (tags: tag:server, tag:subnet-router, tag:terraform),
+#    Devices > Core,
+#    Devices > Tags (tag:server, tag:subnet-router, tag:terraform),
 #    Devices > Routes, General > Policy File, General > DNS,
-#    Keys > Auth Keys (tags: tag:server), Settings > Networking Settings
+#    Keys > Auth Keys (tag:server), Settings > Networking Settings
 #    (full list and API scope names: providers.tf)
 # 3. Copy client ID and secret below
 # ============================================================
