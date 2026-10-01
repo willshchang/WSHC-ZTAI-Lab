@@ -15,11 +15,12 @@
 // ============================================================
 
 import { createHash } from "node:crypto";
-import { statSync } from "node:fs";
+import { chmodSync, readFileSync, statSync } from "node:fs";
 import { dirname } from "node:path";
 import { runAgent, RETRY_MAX_TOKENS } from "../core/agent.ts";
 import { makeFrictionTool } from "../core/friction.ts";
-import { forTerminal, hasControlChars } from "../core/sanitize.ts";
+import { forTerminal, hasControlChars, jsonSafe } from "../core/sanitize.ts";
+import { cutAt, escapeSlack } from "../core/slack.ts";
 import { Trace } from "../core/trace.ts";
 import type { AgentPolicy, AgentTool, ToolContext } from "../core/types.ts";
 import { DEFAULT_MAX_STRING, validateInput } from "../core/validate.ts";
@@ -123,6 +124,14 @@ check(hasControlChars("ok\u202e") && hasControlChars("x\r") && !hasControlChars(
   check(h.prompts.length === 0 && written.length === 0, "an external write whose input holds control characters is refused before a human is asked");
   check(ofType(r.traceFile, "input_invalid").length === 1, "and the refusal is traced");
 }
+for (const [label, bad] of [["a bidi override", "hi\u202e"], ["a C1 control", "hi\x85"], ["a zero-width space", "hi\u200b"], ["a byte order mark", "hi\ufeff"]] as const) {
+  const h = scriptHuman(["y"]);
+  written = [];
+  const m = scriptedModel([[use("write_tool", { message: bad })], [say("done")]]);
+  await run(m.client);
+  check(h.prompts.length === 0 && written.length === 0, `an external write holding ${label} is refused before a human is asked`);
+}
+check(forTerminal("a\u2028b\u200bc\ufeffd\u2063e") === "a\\u2028b\\u200bc\\ufeffd\\u2063e", "line separators, zero-width characters, the BOM and invisible operators are shown as escapes");
 
 // ---- A6: schema checks before anything runs -------------------------
 check(validateInput(readTool.inputSchema, { id: "a" }).length === 0, "valid input passes");
@@ -162,6 +171,15 @@ for (const [input, why] of [
   check(readRuns === 1, "a tool call cut off by max_tokens is not run; the retried call is");
   check(m.requests[1]?.maxTokens === RETRY_MAX_TOKENS && m.requests[0]?.maxTokens === undefined, "the retry asks for a higher token limit, once");
   check(ofType(r.traceFile, "truncated_tool_call").length === 1 && r.outcome === "completed", "the cut-off call is traced and the run continues");
+}
+{
+  readRuns = 0;
+  const m = scriptedModel([
+    { blocks: [use("read_tool", { id: "partial" })], stopReason: "model_context_window_exceeded" },
+    [say("done")],
+  ]);
+  const { r } = await run(m.client);
+  check(readRuns === 0 && ofType(r.traceFile, "truncated_tool_call").length === 1, "a tool call cut off by the context window limit is not run either");
 }
 {
   readRuns = 0;
@@ -209,6 +227,26 @@ for (const [input, why] of [
   check(h.prompts.length === 2 && written.length === 2, "a yes does not stop the next request from being asked (only a no carries over)");
 }
 noHuman();
+
+// ---- Traces: an existing loose folder is tightened; lines are grep-safe
+if (process.platform !== "win32") {
+  const first = new Trace("agent-real");
+  chmodSync(dirname(first.file), 0o755); // a folder made before the 0700 rule
+  const again = new Trace("agent-real");
+  check((statSync(dirname(again.file)).mode & 0o777) === 0o700, "an existing trace folder with loose permissions is tightened to 0700");
+}
+{
+  const t = new Trace("agent-real");
+  t.record("tool_result", { output: "ok\u202eevil\x85\u200b" });
+  const raw = readFileSync(t.file, "utf8");
+  check(!/[\u202e\x85\u200b]/.test(raw) && raw.includes("\\u202e"), "trace lines store bidi, C1 and invisible characters as escapes, so grep can't be spoofed");
+  check(traceLines(t.file)[0]?.output === "ok\u202eevil\x85\u200b", "the escaped line is still valid JSON with the original value");
+  check(jsonSafe('"a\u2066b"') === '"a\\u2066b"', "jsonSafe escapes bidi isolates");
+}
+{
+  const emoji = "ab\u{1F600}";
+  check(cutAt(emoji, 3) === "ab" && escapeSlack(emoji, 3) === "ab... (truncated)", "Slack truncation never splits an emoji in half");
+}
 
 // ---- The trace stamp always wins ------------------------------------
 {

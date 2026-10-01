@@ -12,6 +12,7 @@ import { randomUUID } from "node:crypto";
 import { appendFileSync, chmodSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { jsonSafe } from "./sanitize.ts";
 
 const TRACE_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "traces");
 
@@ -66,6 +67,8 @@ export class Trace {
     // The stamp is applied first (for readable field order) AND last,
     // so event data can never overwrite who did it or when
     const line = { ...stamp, ...data, ...stamp };
-    appendFileSync(this.file, JSON.stringify(line) + "\n", { mode: FILE_MODE });
+    // C1, bidi and invisible characters are written as JSON escapes (backslash u), so
+    // grepping a trace in a terminal shows them instead of obeying them
+    appendFileSync(this.file, jsonSafe(JSON.stringify(line)) + "\n", { mode: FILE_MODE });
   }
 }

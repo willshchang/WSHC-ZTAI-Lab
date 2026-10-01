@@ -7,6 +7,7 @@
 //   npm run gtm -- --list                          (show signup ids)
 // ============================================================
 
+import { say } from "../core/sanitize.ts";
 import { runGtm } from "./agent.ts";
 import { gtmTask } from "./policy.ts";
 import { signups } from "./scoring.ts";
@@ -20,7 +21,8 @@ const value = (name: string) => {
 
 if (flag("list")) {
   console.log("Signups:");
-  for (const s of signups) console.log(`  ${s.id.padEnd(20)} ${s.company}`);
+  // Company names are customer data: shown terminal-safe
+  for (const s of signups) say(`  ${s.id.padEnd(20)} ${s.company}`);
   process.exit(0);
 }
 

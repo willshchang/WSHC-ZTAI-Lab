@@ -10,6 +10,7 @@
 // The real tenant is only ever reached with an explicit --graph real.
 // ============================================================
 
+import { say } from "../core/sanitize.ts";
 import { resetMockTenant } from "./graph.ts";
 import { runJml } from "./agent.ts";
 import { HR_EVENT_ID, loadHrEvents } from "./planner.ts";
@@ -30,7 +31,8 @@ if (flag("reset-mock")) {
 
 if (flag("list")) {
   console.log("HR events:");
-  for (const e of loadHrEvents()) console.log(`  ${e.id}  ${e.type.padEnd(7)} ${e.displayName}${e.team ? ` -> ${e.team}` : ""}`);
+  // Names and teams are HR data: shown terminal-safe
+  for (const e of loadHrEvents()) say(`  ${e.id}  ${e.type.padEnd(7)} ${e.displayName}${e.team ? ` -> ${e.team}` : ""}`);
   process.exit(0);
 }
 

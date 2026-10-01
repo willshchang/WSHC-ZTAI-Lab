@@ -30,8 +30,16 @@ export const SLACK_TIMEOUT_MS = 15_000;
 // ------------------------------------------------------------
 export function escapeSlack(text: string, maxChars?: number): string {
   const capped =
-    maxChars !== undefined && text.length > maxChars ? `${text.slice(0, maxChars)}... (truncated)` : text;
+    maxChars !== undefined && text.length > maxChars ? `${cutAt(text, maxChars)}... (truncated)` : text;
   return capped.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+// Cuts to at most max UTF-16 units without splitting a surrogate pair:
+// half of an emoji would be an invalid character in the Slack payload
+export function cutAt(text: string, max: number): string {
+  const cut = text.slice(0, max);
+  const last = cut.charCodeAt(cut.length - 1);
+  return last >= 0xd800 && last <= 0xdbff ? cut.slice(0, -1) : cut;
 }
 
 export interface SlackResult {
