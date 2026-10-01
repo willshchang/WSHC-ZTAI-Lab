@@ -1,5 +1,7 @@
 # Secrets: API keys and webhook URLs never leave this machine
 .env
+.env.*
+!.env.example
 
 # Dependencies
 node_modules/

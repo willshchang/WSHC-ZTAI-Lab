@@ -14,6 +14,7 @@
     "scarlet:mock": "node --env-file-if-exists=.env scarlet/index.ts --mock",
     "jml": "node --env-file-if-exists=.env jml/index.ts",
     "jml:mock": "node --env-file-if-exists=.env jml/index.ts --mock",
+    "test": "node tests/run-all.ts",
     "test:contract": "node tests/scarlet-contract.ts",
     "test:policy": "node tests/policy-enforcement.ts",
     "test:jml": "node tests/jml.ts",
@@ -21,6 +22,8 @@
     "test:mock-tag": "node tests/mock-tag.ts",
     "test:act-first": "node tests/act-first.ts",
     "test:chat": "node tests/chat.ts",
+    "test:engine": "node tests/engine.ts",
+    "test:gtm": "node tests/gtm.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

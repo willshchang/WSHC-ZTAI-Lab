@@ -123,11 +123,15 @@ export function createMockClient(): ModelClient {
       }
 
       if (!last("post_to_slack")) {
-        const { message } = JSON.parse(draft.output);
-        return toolUse("post_to_slack", { message }, "Asking a human to approve the post.");
+        // Only the id: the tool posts the stored draft, word for word
+        return toolUse("post_to_slack", { signup_id: signupId }, "Asking a human to approve the post.");
       }
 
-      const post = JSON.parse(last("post_to_slack")!.output);
+      const posted = last("post_to_slack")!.output;
+      if (!posted.startsWith("{")) {
+        return finish(`The post did not go out (${posted.split(".")[0]}). Nothing was sent.`);
+      }
+      const post = JSON.parse(posted);
       const delivery = post.dryRun ? "approved (dry run, no webhook set)" : "approved and posted";
       return finish(
         `Routed ${signupId} to ${score.recommended_route} (score ${score.score}/100). ` +

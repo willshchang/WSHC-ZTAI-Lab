@@ -18,6 +18,11 @@ export const jmlPolicy: AgentPolicy = {
   apiKeyEnv: "ANTHROPIC_API_KEY_JML",
 };
 
+// The task contract (same format as scarlet/agents.json). The event
+// id in the task is the ONLY event this run may read, plan or apply.
+export const JML_TASK = /^Process HR event\. event_id: (hr-[0-9]{4})$/;
+export const jmlTask = (eventId: string) => `Process HR event. event_id: ${eventId}`;
+
 export const jmlSystemPrompt = `You are the JML Agent for a small company's identity system (Microsoft Entra ID).
 Your single job: process one HR event. Follow these steps in order:
 

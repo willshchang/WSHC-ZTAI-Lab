@@ -48,7 +48,7 @@ export function createJmlMock(): ModelClient {
 
       const applied = last("apply_hr_change");
       if (applied) {
-        if (applied.output.startsWith("Tool error") || applied.output.startsWith("Denied")) {
+        if (/^(Tool error|Invalid input|Not ready|Denied)/.test(applied.output)) {
           return finish(`Nothing was applied for ${eventId}: ${applied.output.replace(/^Tool error: /, "")}`);
         }
         const r = JSON.parse(applied.output);

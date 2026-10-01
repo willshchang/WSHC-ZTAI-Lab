@@ -7,7 +7,9 @@
 //   npm run gtm -- --list                          (show signup ids)
 // ============================================================
 
+import { say } from "../core/sanitize.ts";
 import { runGtm } from "./agent.ts";
+import { gtmTask } from "./policy.ts";
 import { signups } from "./scoring.ts";
 
 const args = process.argv.slice(2);
@@ -19,7 +21,8 @@ const value = (name: string) => {
 
 if (flag("list")) {
   console.log("Signups:");
-  for (const s of signups) console.log(`  ${s.id.padEnd(20)} ${s.company}`);
+  // Company names are customer data: shown terminal-safe
+  for (const s of signups) say(`  ${s.id.padEnd(20)} ${s.company}`);
   process.exit(0);
 }
 
@@ -30,7 +33,9 @@ if (!signups.some((s) => s.id === signupId)) {
 }
 
 try {
-  await runGtm({ task: `Route this new signup. signup_id: ${signupId}`, mock: flag("mock") });
+  // The --signup value is the one signup this run may touch
+  const result = await runGtm({ task: gtmTask(signupId), mock: flag("mock") });
+  if (result.outcome === "error") process.exitCode = 1;
 } catch (err) {
   // e.g. the agent's own API key is missing: refuse clearly, no stack trace
   console.error(`\n⛔ ${err instanceof Error ? err.message : String(err)}\n`);

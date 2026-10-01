@@ -65,6 +65,18 @@ export interface ToolContext {
   policy: AgentPolicy;
   trace: Trace;
   mock: boolean; // a test run: anything posted to Slack gets tagged [MOCK]
+  // Set by the engine for an external write a human approved: the exact
+  // text shown in the approval box, and its SHA-256 (also in the trace).
+  // A tool that posts text posts THESE bytes, never a rebuilt copy.
+  approved?: { text: string; sha256: string };
+}
+
+// The schema features the engine enforces (see core/validate.ts)
+export interface PropertySchema {
+  type: "string" | "boolean" | "number" | "integer";
+  enum?: string[];
+  maxLength?: number; // strings without one get a default cap
+  description?: string;
 }
 
 export interface AgentTool {
@@ -72,15 +84,22 @@ export interface AgentTool {
   description: string;
   inputSchema: {
     type: "object";
-    properties: Record<string, unknown>;
+    properties: Record<string, PropertySchema>;
     required?: string[];
+    // Extra fields are always refused by the engine. Sent to the API
+    // too, so the model is told the same rule it is held to.
+    additionalProperties?: false;
   };
   risk: Risk;
   // The tool prints its own user-facing line (chat), so the loop skips
   // its 🔧 console line. The trace still records every call in full.
   printsOwnLine?: boolean;
-  // Shown to the human in the approval prompt (external-write only)
+  // External writes only: the exact text the human approves. It may
+  // throw when the write isn't ready (no draft, no plan): the engine
+  // then refuses the call without asking anyone.
   describeForApproval?: (input: Record<string, unknown>, ctx: ToolContext) => string;
+  // Shown after the tool name in the approval title, e.g. the channel
+  approvalLabel?: string;
   run: (input: Record<string, unknown>, ctx: ToolContext) => Promise<unknown>;
 }
 
@@ -108,7 +127,9 @@ export type Message =
 
 export interface ModelTurn {
   blocks: Block[];
-  stopReason: string; // "tool_use" when it wants a tool, "end_turn" when done
+  // "tool_use" when it wants a tool, "end_turn" when done, "max_tokens"
+  // when it was cut off, "refusal" when it declined (see core/agent.ts)
+  stopReason: string;
 }
 
 export interface ModelRequest {
@@ -116,6 +137,7 @@ export interface ModelRequest {
   messages: Message[];
   tools: AgentTool[];
   mustUseTool?: boolean; // ask the model to call a tool this turn, if it can be forced
+  maxTokens?: number; // raised once by the loop when a tool call was cut off
 }
 
 export interface ModelClient {

@@ -59,6 +59,17 @@ for (const m of [
   "onboard ava please",
   "offboard maya",
   "any new signups today?",
+  // Phrasings an earlier, narrower pattern let through
+  "please handle onboarding for Ava Kim",
+  "offboarding Maya",
+  "we hired a new designer",
+  "Leo is leaving on Friday, disable his account",
+  "deactivate jamie",
+  "remove maya from Frontend",
+  "process HR1003",
+  "process hr 1003",
+  "new sign-up from northwind",
+  "can you triage the latest lead?",
 ]) {
   check((await tryChat(m)) === "refused", `a request is refused by chat: "${m}"`);
 }
@@ -71,6 +82,17 @@ const jmlP = own("agent-jml");
 check(["route pixel-pine", "Route PIXEL-PINE", "any new SIGNUPS?"].every((m) => gtmP.test(m)), "the GTM pattern alone catches its ids and action words, in any case");
 check(["process hr-1008", "Process HR-1008", "OFFBOARD maya", "a new joiner starts monday"].every((m) => jmlP.test(m)), "the JML pattern alone catches its ids and action words, in any case");
 check((await tryChat("Process HR-1008 please")) === "refused", "an upper-case request is still refused by chat");
+check(["please handle onboarding for Ava Kim", "we hired a new designer", "Leo is leaving on Friday", "deactivate jamie", "remove maya from Frontend", "process HR1003", "process hr 1003", "suspend leo", "terminate jamie"].every((m) => jmlP.test(m)),
+  "the JML pattern alone catches word stems and spaced or unhyphenated event ids");
+check(["new sign-up from northwind", "routing question", "triage this lead"].every((m) => gtmP.test(m)), "the GTM pattern alone catches its word stems");
+
+// ---- The patterns stay fast on hostile input (no catastrophic backtracking)
+{
+  const hostile = "a-".repeat(50_000) + "!" + " hr".repeat(20_000) + " x".repeat(20_000);
+  const t0 = performance.now();
+  for (const a of registry) a.requestPattern.test(hostile);
+  check(performance.now() - t0 < 500, "both request patterns finish quickly on a long hostile message");
+}
 
 // ---- A fooled model can't chat past a request ---------------------
 const fake = (name: string): AgentTool => ({

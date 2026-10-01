@@ -35,7 +35,14 @@ const IDLE_MINUTES = 30;
 const args = process.argv.slice(2);
 const mock = args.includes("--mock");
 const gi = args.indexOf("--graph");
-const graph: GraphMode = gi >= 0 && args[gi + 1] === "real" ? "real" : "mock";
+const graphArg = gi >= 0 ? args[gi + 1] : "mock";
+// The value must be mock or real: "--graph route it" must not quietly
+// eat the first word of the request and fall back to a default
+if (graphArg !== "mock" && graphArg !== "real") {
+  console.error('\n⛔ --graph must be followed by "mock" or "real".\n');
+  process.exit(1);
+}
+const graph: GraphMode = graphArg;
 // Drop the flags (and --graph's value) so only the request text remains
 const flagIdx = new Set(gi >= 0 ? [gi, gi + 1] : []);
 const request = args
@@ -59,6 +66,7 @@ async function handle(
     sessionId: session?.id,
     mock, // scripted model: posts are tagged [MOCK]
   });
+  if (result.outcome === "error") process.exitCode = 1;
   if (session) {
     // Remember what was said, not raw data: the request and her final reply
     session.history.push(

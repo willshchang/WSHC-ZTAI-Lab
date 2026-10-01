@@ -11,6 +11,7 @@
 // Risk tier: read. It changes nothing.
 // ============================================================
 
+import { say } from "./sanitize.ts";
 import type { AgentTool } from "./types.ts";
 
 export function makeStandByTool(): AgentTool {
@@ -22,15 +23,16 @@ export function makeStandByTool(): AgentTool {
     inputSchema: {
       type: "object",
       properties: {
-        reason: { type: "string", description: "Why there is nothing to do, in a few words" },
+        reason: { type: "string", maxLength: 300, description: "Why there is nothing to do, in a few words" },
       },
       required: ["reason"],
+      additionalProperties: false,
     },
     risk: "read",
     run: async (input, ctx) => {
       const reason = String(input.reason ?? "").trim() || "no task";
       ctx.trace.record("stand_by", { reason });
-      console.log(`💤 ${ctx.policy.name} is standing by: ${reason}`);
+      say(`💤 ${ctx.policy.name} is standing by: ${reason}`);
       return { standing_by: true, reason };
     },
   };

@@ -6,13 +6,21 @@
 // Exits non-zero on any failure.
 // ============================================================
 
-import { readFileSync } from "node:fs";
-import { loadMockConfig, MockGraph } from "../jml/graph.ts";
-import { applyPlan, buildPlan, loadHrEvents, type HrEvent } from "../jml/planner.ts";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { runJml } from "../jml/agent.ts";
+import { loadMockConfig, loadRealConfig, MockGraph } from "../jml/graph.ts";
+import { applyPlan, buildPlan, loadHrEvents, parseHrEvents, type HrEvent } from "../jml/planner.ts";
 import { jmlPolicy } from "../jml/policy.ts";
 import { jmlTools } from "../jml/tools.ts";
 import { Trace } from "../core/trace.ts";
 import { formatStatus, type Outcome } from "../jml/status.ts";
+import { capture, noHuman, ofType, rejection, say, scriptHuman, scriptedModel, traceLines, use } from "./helpers.ts";
+
+delete process.env.SLACK_WEBHOOK_AGENT_FEEDBACK;
+delete process.env.SLACK_WEBHOOK_JML_STATUS;
+noHuman();
 
 const cfg = loadMockConfig();
 const fixture = JSON.parse(readFileSync(new URL("../jml/mock-tenant.json", import.meta.url), "utf8"));
@@ -99,29 +107,148 @@ check(
   const tg = fresh();
   const setup = await buildPlan(ev("hr-1001"), tg, cfg);
   await applyPlan((setup as { ok: true; plan: never }).plan, tg); // Maya exists, in Frontend
-  const tools = jmlTools(tg, cfg);
+  const tools = jmlTools(tg, cfg, { eventId: "hr-1003" });
   const planTool = tools.find((x) => x.name === "plan_hr_change")!;
   const applyTool = tools.find((x) => x.name === "apply_hr_change")!;
   const ctx = { policy: jmlPolicy, trace: new Trace("agent-jml"), mock: true };
   await planTool.run({ event_id: "hr-1003" }, ctx); // leaver plan approved by a human
   const maya = (await tg.getUser("maya.chen@tinyco.example"))!;
   await tg.addMember(cfg.groups.teams.Legal!, maya.id); // the tenant changes underneath
-  let refused = false;
-  try {
-    await applyTool.run({ event_id: "hr-1003" }, ctx);
-  } catch (err) {
-    refused = /tenant changed/.test(String(err));
-  }
+  const stale = await rejection(() => applyTool.run({ event_id: "hr-1003" }, ctx));
   const still = (await tg.getUser("maya.chen@tinyco.example"))!;
-  check(refused && still.accountEnabled, "a stale plan is refused and nothing is applied");
+  check(/tenant changed/.test(stale) && still.accountEnabled, "a stale plan is refused and nothing is applied");
 
-  let noPlan = false;
-  try {
-    await tools.find((x) => x.name === "apply_hr_change")!.run({ event_id: "hr-1002" }, ctx);
-  } catch (err) {
-    noPlan = /No plan was built/.test(String(err));
+  const unplanned = jmlTools(tg, cfg, { eventId: "hr-1002" }).find((x) => x.name === "apply_hr_change")!;
+  check(/No plan was built/.test(await rejection(() => unplanned.run({ event_id: "hr-1002" }, ctx))), "apply refuses an event that was never planned");
+  check(/No plan was built/.test(await rejection(async () => unplanned.describeForApproval!({ event_id: "hr-1002" }, ctx))),
+    "with no plan, there is nothing to show a human (the engine then asks no one)");
+}
+
+// ---- A changed TARGET is stale too, not only changed steps ---------
+{
+  const tg = fresh();
+  const setup = await buildPlan(ev("hr-1001"), tg, cfg);
+  await applyPlan((setup as { ok: true; plan: never }).plan, tg);
+  const tools = jmlTools(tg, cfg, { eventId: "hr-1003" });
+  const ctx = { policy: jmlPolicy, trace: new Trace("agent-jml"), mock: true };
+  await tools.find((x) => x.name === "plan_hr_change")!.run({ event_id: "hr-1003" }, ctx);
+  // Same steps, different person behind the name: the display name changes
+  const state = (tg as unknown as { s: { users: { upn: string; displayName: string }[] } }).s;
+  state.users.find((u) => u.upn === "maya.chen@tinyco.example")!.displayName = "Maya Chen (renamed)";
+  const err = await rejection(() => tools.find((x) => x.name === "apply_hr_change")!.run({ event_id: "hr-1003" }, ctx));
+  const user = (await tg.getUser("maya.chen@tinyco.example"))!;
+  check(/tenant changed/.test(err) && user.accountEnabled, "a plan whose target changed (same steps) is refused as stale");
+}
+
+// ---- A refusal withdraws an earlier good plan -----------------------
+{
+  const tg = fresh();
+  const setup = await buildPlan(ev("hr-1001"), tg, cfg);
+  await applyPlan((setup as { ok: true; plan: never }).plan, tg); // Maya, JML-managed
+  const tools = jmlTools(tg, cfg, { eventId: "hr-1003" });
+  const ctx = { policy: jmlPolicy, trace: new Trace("agent-jml"), mock: true };
+  await tools.find((x) => x.name === "plan_hr_change")!.run({ event_id: "hr-1003" }, ctx); // ok plan
+  const maya = (await tg.getUser("maya.chen@tinyco.example"))!;
+  await tg.addMember("mock-grp-breakglass", maya.id); // now protected
+  const second = (await tools.find((x) => x.name === "plan_hr_change")!.run({ event_id: "hr-1003" }, ctx)) as { refused?: boolean };
+  const err = await rejection(async () => tools.find((x) => x.name === "apply_hr_change")!.describeForApproval!({ event_id: "hr-1003" }, ctx));
+  check(second.refused === true && /No plan was built/.test(err), "after a refusal, the earlier ok plan can no longer be approved or applied");
+}
+
+// ---- ID binding: a run touches only the event in its task ----------
+{
+  const tg = fresh();
+  const tools = jmlTools(tg, cfg, { eventId: "hr-1001" });
+  const trace = new Trace("agent-jml");
+  const ctx = { policy: jmlPolicy, trace, mock: true };
+  for (const name of ["get_hr_event", "plan_hr_change", "apply_hr_change"]) {
+    const err = await rejection(() => tools.find((x) => x.name === name)!.run({ event_id: "hr-1009" }, ctx));
+    check(/may only process HR event "hr-1001"/.test(err), `${name} refuses an event other than the one in its task`);
   }
-  check(noPlan, "apply refuses an event that was never planned");
+  const denials = readFileSync(trace.file, "utf8").split("\n").filter((l) => l.includes('"policy_denied"') && l.includes('"id_binding"'));
+  check(denials.length === 3, "each refused id is traced as policy_denied (id_binding)");
+  check(!!(await tools.find((x) => x.name === "get_hr_event")!.run({ event_id: "hr-1001" }, ctx)), "the event in its task is still allowed");
+}
+check(/does not match its contract/.test(await rejection(() => runJml({ task: "Process HR event. event_id: hr-1001. And hr-1009", mock: true }))),
+  "runJml refuses a task that doesn't match the contract, so the bound id is always the contract's");
+
+// ---- Protected accounts: nested members are protected too ----------
+{
+  const nested = structuredClone(fixture);
+  // An admin whose break-glass membership comes through a nested group
+  nested.users.push({ id: "mock-user-nested", upn: "nested.admin@tinyco.example", displayName: "Nested Admin", accountEnabled: true });
+  nested.memberships["mock-grp-breakglass"].push("mock-grp-breakglass-ops");
+  nested.memberships["mock-grp-breakglass-ops"] = ["mock-user-nested"];
+  nested.memberships["mock-grp-jml-managed"] = ["mock-user-nested"];
+  const g2 = new MockGraph({ persist: false, state: nested });
+  const leaver: HrEvent = { id: "hr-9003", type: "leaver", username: "nested.admin", displayName: "Nested Admin" };
+  const p = await buildPlan(leaver, g2, cfg);
+  check(!p.ok && /protected/.test(p.reason), "an account protected through a NESTED group is refused");
+  check((await g2.listMemberIds("mock-grp-breakglass")).includes("mock-user-nested") === false, "(the nested admin is not a direct member: only the transitive check catches it)");
+  // A cycle of nested groups must not hang the check
+  nested.memberships["mock-grp-breakglass-ops"].push("mock-grp-breakglass");
+  const g3 = new MockGraph({ persist: false, state: nested });
+  check((await g3.listTransitiveMemberIds("mock-grp-breakglass")).includes("mock-user-nested"), "nested groups that loop are walked once, without hanging");
+}
+
+// ---- Config and feed are checked at runtime, never just cast -------
+{
+  const dir = mkdtempSync(join(tmpdir(), "jml-"));
+  const file = join(dir, "tenant.local.json");
+  const guid = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
+  const good = { domain: "tinyco.example", groups: { teams: { Design: guid(1) }, managed: guid(2), terminated: guid(3), protected: [guid(4)] } };
+  const loads = (cfgObj: unknown) => { writeFileSync(file, JSON.stringify(cfgObj)); return rejection(async () => loadRealConfig(file)); };
+  check((await loads(good)) === "", "a complete real config with GUID group ids loads");
+  check(/protected is empty/.test(await loads({ ...good, groups: { ...good.groups, protected: [] } })), "an empty protected list is refused (it would protect no one)");
+  check(/protected\[0\] is not a valid group ID/.test(await loads({ ...good, groups: { ...good.groups, protected: ["breakglass"] } })), "a protected entry that isn't a GUID is refused");
+  check(/protected is empty/.test(await loads({ ...good, groups: { ...good.groups, protected: undefined } })), "a missing protected list is refused");
+  check(/managed is not a valid group ID/.test(await loads({ ...good, groups: { ...good.groups, managed: "" } })), "a missing managed group is refused");
+  writeFileSync(file, "{ not json");
+  check(/not valid JSON/.test(await rejection(async () => loadRealConfig(file))), "a config that isn't JSON is refused");
+}
+check(/is not like hr-1001/.test(await rejection(async () => parseHrEvents({ events: [{ id: "hr-1", type: "leaver", username: "a.b", displayName: "A" }] }))),
+  "an HR event with a malformed id is refused at load");
+check(/type must be one of/.test(await rejection(async () => parseHrEvents({ events: [{ id: "hr-1234", type: "fired", username: "a.b", displayName: "A" }] }))),
+  "an HR event with an unknown type is refused at load");
+check(/displayName must be text/.test(await rejection(async () => parseHrEvents({ events: [{ id: "hr-1234", type: "leaver", username: "a.b", displayName: 7 }] }))),
+  "an HR event with a field of the wrong type is refused at load");
+
+// ---- A tenant change is always reported, even if the run errors ----
+{
+  const sg = fresh();
+  scriptHuman(["y"]);
+  const model = scriptedModel([
+    [use("get_hr_event", { event_id: "hr-1001" })],
+    [use("plan_hr_change", { event_id: "hr-1001" })],
+    [use("apply_hr_change", { event_id: "hr-1001" })],
+    () => { throw new Error("API error after apply"); },
+  ]);
+  let result: Awaited<ReturnType<typeof runJml>> | undefined;
+  const out = await capture(async () => { result = await runJml({ task: "Process HR event. event_id: hr-1001", mock: true, deps: { model: model.client, graph: sg } }); });
+  noHuman();
+  const types = traceLines(result!.traceFile).map((l) => l.type);
+  check(result!.outcome === "error" && /Joiner complete/.test(out), "the model failing after apply still posts the #jml-status card for the change");
+  check(types.indexOf("status_card") > types.indexOf("run_error") && types.at(-1) === "run_end", "the card is traced before run_end, after the error");
+}
+{
+  // The card itself fails to post: traced, and the run reports it
+  const sg = fresh();
+  process.env.SLACK_WEBHOOK_JML_STATUS = "https://hooks.slack.invalid/status";
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = (async () => new Response("nope", { status: 500 })) as typeof fetch;
+  const model = scriptedModel([[use("get_hr_event", { event_id: "hr-1004" })], [use("plan_hr_change", { event_id: "hr-1004" })], [say("refused")]]);
+  let result: Awaited<ReturnType<typeof runJml>> | undefined;
+  await capture(async () => { result = await runJml({ task: "Process HR event. event_id: hr-1004", mock: true, deps: { model: model.client, graph: sg } }); });
+  globalThis.fetch = realFetch;
+  delete process.env.SLACK_WEBHOOK_JML_STATUS;
+  check(ofType(result!.traceFile, "status_post_failed").length === 1 && result!.warnings.length === 1, "a #jml-status post that fails is traced and returned as a warning (the CLI exits non-zero)");
+}
+
+// ---- Slack escaping on the card -------------------------------------
+{
+  const evil: HrEvent = { id: "hr-9004", type: "leaver", username: "a.b", displayName: "<!channel> <https://evil.example|click>", team: "<!here>" };
+  const card = formatStatus(evil, { kind: "refused", reason: "x <!everyone> & y" }, { mock: false, runId: "r" });
+  check(!/<!|<https/.test(card) && card.includes("&lt;!channel&gt;") && card.includes("&amp; y"), "names, teams and reasons are escaped on the card, so they can't ping or hide a link");
 }
 
 // ---- #jml-status cards tell the truth ---------------------------
@@ -129,7 +256,7 @@ check(
   // Run a joiner through the real tools, recording outcomes like runJml does
   const sg = fresh();
   const outcomes = new Map<string, Outcome>();
-  const tools = jmlTools(sg, cfg, (id, o) => outcomes.set(id, o));
+  const tools = jmlTools(sg, cfg, { eventId: "hr-1001" }, (id, o) => outcomes.set(id, o));
   const ctx = { policy: jmlPolicy, trace: new Trace("agent-jml"), mock: true };
   let pw = "";
   const orig = sg.createUser.bind(sg);

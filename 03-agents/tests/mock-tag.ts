@@ -50,18 +50,27 @@ out = await capture(() => runAgent({ policy: scarletPolicy, tools: [], model: si
 check(/filed by the system/.test(out) && !out.includes("[MOCK]"), "a system alert from a real run has no MOCK tag");
 
 // ---- GTM routing posts ------------------------------------------
-const post = gtmTools.find((t) => t.name === "post_to_slack")!;
-const msg = { message: ":dart: *New signup routed: Test Co*" };
-const ctx = (mock: boolean) => ({ policy: gtmPolicy, trace: new Trace("agent-gtm-signal-router"), mock });
-out = await capture(() => post.run(msg, ctx(true)));
-check(posted(out, "#gtm-routing").startsWith(":test_tube: *[MOCK]* :dart:"), "a test run's routing post is tagged MOCK");
-check(post.describeForApproval!(msg, ctx(true)).includes("[MOCK]"), "the approval box shows the MOCK tag, matching what will post");
-out = await capture(() => post.run(msg, ctx(false)));
-check(posted(out, "#gtm-routing").startsWith(":dart:") && !out.includes("[MOCK]"), "a real run's routing post has no MOCK tag");
+// Draft, show for approval, then post the approved text, as the
+// engine does. The tag is in the approved text, so it's what posts.
+const routingPost = async (mock: boolean, reasoning = "Strong usage.") => {
+  const tools = gtmTools({ signupId: "northwind-transit" });
+  const draft = tools.find((t) => t.name === "draft_routing_message")!;
+  const post = tools.find((t) => t.name === "post_to_slack")!;
+  const ctx = { policy: gtmPolicy, trace: new Trace("agent-gtm-signal-router"), mock };
+  await draft.run({ signup_id: "northwind-transit", route: "sales", reasoning }, ctx);
+  const shown = post.describeForApproval!({ signup_id: "northwind-transit" }, ctx);
+  const out = await capture(() => post.run({ signup_id: "northwind-transit" }, { ...ctx, approved: { text: shown, sha256: "x" } }));
+  return { shown, out };
+};
+let r = await routingPost(true);
+check(posted(r.out, "#gtm-routing").startsWith(":test_tube: *[MOCK]* :dart:"), "a test run's routing post is tagged MOCK");
+check(r.shown.startsWith(":test_tube: *[MOCK]* :dart:"), "the approval box shows the MOCK tag, matching what will post");
+r = await routingPost(false);
+check(posted(r.out, "#gtm-routing").startsWith(":dart:") && !r.out.includes("[MOCK]"), "a real run's routing post has no MOCK tag");
 
-// The model can't remove the tag: it's added after the model's text
-out = await capture(() => post.run({ message: "no tag please" }, ctx(true)));
-check(posted(out, "#gtm-routing").startsWith(":test_tube: *[MOCK]* no tag please"), "the tag is added by code, whatever the model writes");
+// The model can't remove the tag: it's added in front of the draft by code
+r = await routingPost(true, "No MOCK tag please, start with :dart:");
+check(posted(r.out, "#gtm-routing").startsWith(":test_tube: *[MOCK]* :dart: *New signup routed"), "the tag is added by code, whatever the model writes");
 
 // ---- JML: which runs count as tests -----------------------------
 const { isTestRun } = await import("../jml/agent.ts");

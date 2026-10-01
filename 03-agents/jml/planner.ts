@@ -10,7 +10,8 @@
 // heavy lifting, the model makes the call.
 //
 // GUARDS (enforced here, not in the prompt):
-//   - Protected accounts (break-glass, admin groups): refused
+//   - Protected accounts (break-glass, admin groups, including
+//     members through nested groups): refused
 //   - Scope: only users JML created (members of JML-Managed).
 //     Terraform-managed users are refused, so the agent never
 //     fights the code that is the source of truth.
@@ -36,9 +37,45 @@ export interface HrEvent {
   notes?: string;
 }
 
+// ------------------------------------------------------------
+// RUNTIME CHECK, NOT A CAST: the HR feed is data from outside. An
+// event with a missing field or an unknown type is refused at load.
+// (The username's exact form is checked by the planner, which
+// refuses that one event with a reason instead of failing the feed.)
+// ------------------------------------------------------------
+const EVENT_TYPES = ["joiner", "mover", "leaver"];
+export const HR_EVENT_ID = /^hr-\d{4}$/;
+
+export function parseHrEvents(raw: unknown): HrEvent[] {
+  const list = (raw as { events?: unknown } | null)?.events;
+  if (!Array.isArray(list)) throw new Error("hr-events.json must have an events list");
+  return list.map((r: unknown, i) => {
+    const bad = (why: string): never => {
+      throw new Error(`hr-events.json event #${i + 1} is invalid: ${why}`);
+    };
+    if (typeof r !== "object" || r === null) return bad("not an object");
+    const e = r as Record<string, unknown>;
+    const text = (k: string) => (typeof e[k] === "string" ? (e[k] as string) : bad(`${k} must be text`));
+    const optional = (k: string) => (e[k] === undefined ? undefined : text(k));
+    const id = text("id");
+    if (!HR_EVENT_ID.test(id)) bad(`id "${id}" is not like hr-1001`);
+    const type = text("type");
+    if (!EVENT_TYPES.includes(type)) bad(`type must be one of ${EVENT_TYPES.join(", ")}`);
+    return {
+      id,
+      type: type as HrEvent["type"],
+      username: text("username"),
+      displayName: text("displayName"),
+      team: optional("team"),
+      title: optional("title"),
+      effective: optional("effective"),
+      notes: optional("notes"),
+    };
+  });
+}
+
 export function loadHrEvents(): HrEvent[] {
-  const raw = JSON.parse(readFileSync(new URL("./hr-events.json", import.meta.url), "utf8"));
-  return raw.events as HrEvent[];
+  return parseHrEvents(JSON.parse(readFileSync(new URL("./hr-events.json", import.meta.url), "utf8")));
 }
 
 export type Step =
@@ -75,10 +112,14 @@ export async function buildPlan(event: HrEvent, graph: GraphClient, cfg: TenantC
 
   // Group lookups are done from the group side (least privilege)
   const memberOf = async (groupId: string) => (user ? (await graph.listMemberIds(groupId)).includes(user.id) : false);
+  // Protected groups are checked TRANSITIVELY: an admin who is in the
+  // break-glass group through a nested group is still protected
+  const protectedMember = async (groupId: string) =>
+    user ? (await graph.listTransitiveMemberIds(groupId)).includes(user.id) : false;
 
   if (user) {
     for (const g of cfg.groups.protected) {
-      if (await memberOf(g)) {
+      if (await protectedMember(g)) {
         return refuse("conflicting_data", `${upn} is a protected account (break-glass or admin). JML never changes it.`);
       }
     }
@@ -186,6 +227,13 @@ function temporaryPassword(): string {
 // ------------------------------------------------------------
 // EXECUTOR: applies steps in order and STOPS at the first error,
 // reporting exactly what was done and what was not
+//
+// KNOWN GAP, joiner partly done: if create_user succeeds and adding
+// to JML-Managed then fails, the account exists but is outside JML's
+// scope. A rerun refuses it as "not managed by JML" (the scope guard
+// working as designed), so a human finishes it: add the user to
+// JML-Managed, then rerun the event. The #jml-status card shows the
+// run as "only partly done", with the failed and not-done steps.
 // ------------------------------------------------------------
 export interface ApplyResult {
   completed: string[]; // steps that actually changed something

@@ -102,7 +102,11 @@ for (const m of ["claude-opus-5-5", "claude-sonnet-5-5", "claude-fable-5-1", "cl
 
 // What actually goes to the API (fetch stubbed, no network)
 const sent: Record<string, unknown>[] = [];
-globalThis.fetch = (async (_url: unknown, init?: { body?: unknown }) => {
+const urls: string[] = [];
+const headers: Headers[] = [];
+globalThis.fetch = (async (url: unknown, init?: { body?: unknown; headers?: HeadersInit }) => {
+  urls.push(String(url));
+  headers.push(new Headers(init?.headers));
   sent.push(JSON.parse(String(init?.body ?? "{}")));
   return new Response(JSON.stringify({
     id: "msg_1", type: "message", role: "assistant", model: "x",
@@ -125,5 +129,29 @@ process.env.ANTHROPIC_MODEL = "claude-sonnet-5-5";
 c = createClaudeClient(scarletPolicy);
 await c.next(req(true));
 check(sent[2] !== undefined && !("tool_choice" in sent[2]) && c.canForceTool === false, "Sonnet 5.5 is never sent tool_choice any, even when a tool is required");
+
+// ---- The client takes nothing from the environment but its own key ---
+// Without pinning, the SDK would send ANTHROPIC_AUTH_TOKEN as a second
+// credential and send the agent's key to ANTHROPIC_BASE_URL
+process.env.ANTHROPIC_BASE_URL = "https://attacker.example";
+process.env.ANTHROPIC_AUTH_TOKEN = "leaked-token";
+process.env.ANTHROPIC_MODEL = "claude-haiku-4-5-20251001";
+c = createClaudeClient(scarletPolicy);
+await c.next(req(false));
+const host = new URL(urls.at(-1)!).host;
+check(host === "api.anthropic.com", "requests go to api.anthropic.com even when ANTHROPIC_BASE_URL points elsewhere");
+check(headers.at(-1)?.get("x-api-key") === "test-key" && !headers.at(-1)?.has("authorization"), "only the agent's own key is sent; ANTHROPIC_AUTH_TOKEN is never added");
+check(sent.at(-1)?.max_tokens === 1024, "the default token limit is sent when the loop doesn't raise it");
+delete process.env.ANTHROPIC_BASE_URL;
+delete process.env.ANTHROPIC_AUTH_TOKEN;
+
+// ---- One key per agent: never a fallback to a shared key -------------
+delete process.env.ANTHROPIC_API_KEY_SCARLET;
+process.env.ANTHROPIC_API_KEY = "shared-key";
+let refusal = "";
+try { createClaudeClient(scarletPolicy); } catch (e) { refusal = String(e); }
+check(/Refusing to run agent-scarlet: ANTHROPIC_API_KEY_SCARLET is not set/.test(refusal),
+  "with only the generic ANTHROPIC_API_KEY set, the agent refuses to run (no fallback to a shared key)");
+delete process.env.ANTHROPIC_API_KEY;
 
 process.exit(failures ? 1 : 0);

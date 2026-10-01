@@ -15,8 +15,8 @@
 // Risk tier: read. It changes nothing; it only reads a human reply.
 // ============================================================
 
-import { createInterface } from "node:readline/promises";
-import { stdin, stdout } from "node:process";
+import { human } from "./approval.ts";
+import { say } from "./sanitize.ts";
 import type { AgentTool } from "./types.ts";
 
 const MAX_QUESTIONS = 3;
@@ -34,9 +34,10 @@ export function makeAskHumanTool(): AgentTool {
     inputSchema: {
       type: "object",
       properties: {
-        question: { type: "string", description: "One short, specific question" },
+        question: { type: "string", maxLength: 500, description: "One short, specific question" },
       },
       required: ["question"],
+      additionalProperties: false,
     },
     risk: "read",
     run: async (input, ctx) => {
@@ -48,22 +49,16 @@ export function makeAskHumanTool(): AgentTool {
       }
       asked += 1;
 
-      if (!stdin.isTTY) {
+      if (!human.available()) {
         ctx.trace.record("clarification_denied", { question, reason: "no_human_available" });
         console.log(`\n[ask_human] No interactive terminal, so the question is DENIED by default.`);
         throw new Error("No human is available to answer (denied by default). Report friction and stop.");
       }
 
       console.log("\n" + "-".repeat(60));
-      console.log(`❓ ${ctx.policy.name} asks: ${question}`);
+      say(`❓ ${ctx.policy.name} asks: ${question}`); // model text: terminal-safe
       console.log("-".repeat(60));
-      const rl = createInterface({ input: stdin, output: stdout });
-      let answer: string;
-      try {
-        answer = (await rl.question("Your answer: ")).trim().slice(0, MAX_ANSWER_CHARS);
-      } finally {
-        rl.close();
-      }
+      const answer = (await human.ask("Your answer: ")).trim().slice(0, MAX_ANSWER_CHARS);
 
       ctx.trace.record("clarification", { question, answer });
       if (!answer) {

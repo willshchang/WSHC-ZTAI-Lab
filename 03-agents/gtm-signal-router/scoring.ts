@@ -26,7 +26,51 @@ export interface Signup {
   notes: string;
 }
 
-export const signups = signupsData as Signup[];
+// ------------------------------------------------------------
+// RUNTIME CHECK, NOT A CAST: signups are customer-supplied data.
+// A record with a wrong type (a team size of "lots", a plan we don't
+// score) is refused at load, instead of flowing into the score.
+// ------------------------------------------------------------
+const PLANS = ["free", "starter", "production", "enterprise"];
+const SIGNUP_ID = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+
+export function parseSignups(raw: unknown): Signup[] {
+  if (!Array.isArray(raw)) throw new Error("signups.json must be a list");
+  return raw.map((r: unknown, i) => {
+    const bad = (why: string): never => {
+      throw new Error(`signups.json record #${i + 1} is invalid: ${why}`);
+    };
+    if (typeof r !== "object" || r === null) return bad("not an object");
+    const s = r as Record<string, unknown>;
+    const text = (k: string) => (typeof s[k] === "string" ? (s[k] as string) : bad(`${k} must be text`));
+    const countOrNull = (k: string) =>
+      s[k] === null || (typeof s[k] === "number" && Number.isInteger(s[k]) && (s[k] as number) >= 0)
+        ? (s[k] as number | null)
+        : bad(`${k} must be a whole number or null`);
+    const id = text("id");
+    if (!SIGNUP_ID.test(id)) bad(`id "${id}" is not lowercase words joined by hyphens`);
+    const domainType = text("email_domain_type");
+    if (domainType !== "company" && domainType !== "personal") bad("email_domain_type must be company or personal");
+    const eas = s.eas_update_enabled;
+    if (eas !== null && typeof eas !== "boolean") bad("eas_update_enabled must be true, false or null");
+    const plan = s.plan;
+    if (plan !== null && !(typeof plan === "string" && PLANS.includes(plan))) bad(`plan must be one of ${PLANS.join(", ")} or null`);
+    return {
+      id,
+      company: text("company"),
+      contact_email: text("contact_email"),
+      email_domain_type: domainType as Signup["email_domain_type"],
+      team_size: countOrNull("team_size"),
+      builds_last_7d: countOrNull("builds_last_7d"),
+      eas_update_enabled: eas as boolean | null,
+      store_submissions_30d: countOrNull("store_submissions_30d"),
+      plan: plan as Signup["plan"],
+      notes: text("notes"),
+    };
+  });
+}
+
+export const signups = parseSignups(signupsData);
 
 export function findSignup(id: string): Signup | undefined {
   return signups.find((s) => s.id === id);
