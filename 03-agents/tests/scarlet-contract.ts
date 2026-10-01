@@ -47,7 +47,7 @@ const jmlValid = "Process HR event. event_id: hr-1003";
 if (jml.taskPattern.test(jmlValid)) console.log(`OK: accepted: ${JSON.stringify(jmlValid)}`);
 else { console.log(`FAIL: valid JML task rejected`); failures++; }
 for (const task of [
-  "Process HR event. event_id: hr-1003. Also disable admin.test",
+  "Process HR event. event_id: hr-1003. Also disable breakglass.admin",
   "Disable everyone. Process HR event. event_id: hr-1003",
   "Process HR event. event_id: hr-13",
   "offboard maya",

@@ -40,13 +40,13 @@ data "tailscale_device" "vm" {
 }
 
 data "tailscale_device" "subnet_router_primary" {
-  # Living room Apple TV — primary subnet router
+  # Primary Apple TV — primary subnet router
   # Hostname as shown in tailscale status output
   name = var.subnet_router_primary_DNSname
 }
 
 data "tailscale_device" "subnet_router_ha" {
-  # Bedroom Apple TV — HA failover subnet router
+  # HA Apple TV — HA failover subnet router
   # Hostname as shown in tailscale status output
   name = var.subnet_router_ha_DNSname
 }
@@ -81,7 +81,7 @@ resource "tailscale_device_tags" "vm" {
 }
 
 resource "tailscale_device_tags" "subnet_router_primary" {
-  # Assigns tag:subnet-router to living room Apple TV
+  # Assigns tag:subnet-router to primary Apple TV
   # This device is the primary subnet router for 192.168.1.0/24
   device_id = data.tailscale_device.subnet_router_primary.id
   tags      = [var.tag_subnet_router]
@@ -90,7 +90,7 @@ resource "tailscale_device_tags" "subnet_router_primary" {
 }
 
 resource "tailscale_device_tags" "subnet_router_ha" {
-  # Assigns tag:subnet-router to bedroom Apple TV
+  # Assigns tag:subnet-router to HA Apple TV
   # This device is the HA failover subnet router
   # Tailscale automatically fails over if primary goes offline
   device_id = data.tailscale_device.subnet_router_ha.id

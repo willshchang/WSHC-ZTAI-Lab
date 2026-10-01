@@ -12,7 +12,7 @@
     "protected": ["mock-grp-breakglass", "mock-grp-itops-admins"]
   },
   "users": [
-    { "id": "mock-user-breakglass", "upn": "admin.test@tinyco.example", "displayName": "Break-glass Admin", "accountEnabled": true },
+    { "id": "mock-user-breakglass", "upn": "breakglass.admin@tinyco.example", "displayName": "Break-glass Admin", "accountEnabled": true },
     { "id": "mock-user-jamie", "upn": "jamie.taylor@tinyco.example", "displayName": "Jamie Taylor", "accountEnabled": true }
   ],
   "memberships": {

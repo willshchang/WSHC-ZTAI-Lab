@@ -133,7 +133,7 @@ Expected: `git version 2.x.x`
 ### 2.2 Configure Git Identity
 ```bash
 git config --global user.name "Will Chang"
-git config --global user.email "WCTinyCoLab@outlook.com"
+git config --global user.email "you@example.com"
 ```
 
 ### 2.3 Install Azure CLI
@@ -175,8 +175,8 @@ terraform --version
 ### 3.1 Clone the Repository
 ```bash
 cd ~/Desktop
-git clone https://github.com/willshchang/WSHC-Entra-IaC-Zero-Trust-Lab.git
-cd WSHC-Entra-IaC-Zero-Trust-Lab
+git clone https://github.com/willshchang/WSHC-ZTAI-Lab.git
+cd WSHC-ZTAI-Lab/01-identity
 code .
 ```
 
@@ -186,7 +186,7 @@ code .
 > Azure CLI sessions expire and require re-authentication. Always 
 > authenticate before running any Terraform commands.
 ```bash
-az login --tenant "42a9915e-aa4a-4426-9a86-a04a0dac6222" \
+az login --tenant "<tenant-id>" \
   --scope "https://graph.microsoft.com/.default"
 ```
 
@@ -280,7 +280,14 @@ domain_name  = "<tenant>.onmicrosoft.com"
 
 # Admin accounts
 primary_admin_upn     = "<admin>@<tenant>.onmicrosoft.com"
-breakglass_account_prefix = "admin.test"
+breakglass_account_prefix = "breakglass.admin"
+
+# SAML app endpoints (real values stay in this gitignored file)
+app_urls = {
+  "mattermost" = "tinyco-vm.<tailnet>.ts.net"
+  "tableau"    = "<site-id>/<idp-id>"
+  "elastic"    = "<deployment>.kb.<region>.azure.elastic-cloud.com"
+}
 
 # Entra ID directory roles
 entra_role_map = {
@@ -299,8 +306,8 @@ azure_role_map = {
 
 | Item | Value |
 |---|---|
-| Tenant ID | `42a9915e-aa4a-4426-9a86-a04a0dac6222` |
-| Subscription ID | `29923100-cb5f-44bc-aec9-1207134ba164` |
+| Tenant ID | `<tenant-id>` |
+| Subscription ID | `<subscription-id>` |
 | Tenant Domain | `<tenant>.onmicrosoft.com` |
 
 > **Security note:** `terraform.tfvars` is listed in `.gitignore` 
@@ -378,7 +385,7 @@ for HTTPS termination.
 
 **Prerequisites:** Azure VM must be running and Tailscale connected.
 
-**Access URL:** `https://tinyco-vm.hair-squeaker.ts.net/<team-name>`
+**Access URL:** `https://tinyco-vm.<tailnet>.ts.net/<team-name>`
 
 ### 7.3 Tableau Cloud
 
@@ -444,14 +451,14 @@ for HTTPS termination.
 
 | Item | Value |
 |---|---|
-| Tenant ID | `42a9915e-aa4a-4426-9a86-a04a0dac6222` |
-| Subscription ID | `29923100-cb5f-44bc-aec9-1207134ba164` |
+| Tenant ID | `<tenant-id>` |
+| Subscription ID | `<subscription-id>` |
 | Tenant Domain | `<tenant>.onmicrosoft.com` |
 | Admin Account | `<admin>@<tenant>.onmicrosoft.com` |
-| Break-glass Account | `admin.test@<tenant>.onmicrosoft.com` |
-| VM Public IP | `20.63.73.34` |
-| VM Tailscale IP | `100.83.194.101` |
-| Tailscale Hostname | `tinyco-vm.hair-squeaker.ts.net` |
+| Break-glass Account | `breakglass.admin@<tenant>.onmicrosoft.com` |
+| VM Public IP | `<vm-public-ip>` |
+| VM Tailscale IP | `100.x.y.10` |
+| Tailscale Hostname | `tinyco-vm.<tailnet>.ts.net` |
 | Break-glass Password | Stored outside the repo in a password manager |
 
 ---

@@ -71,7 +71,7 @@ Both routers share one route set, defined once in `locals`
 - Zero client reconfiguration needed
 
 **Verified in lab:**
-Disabled primary route → pinged `192.168.1.254` from Azure VM 
+Disabled primary route → pinged `192.168.1.1` from Azure VM 
 → 4/4 packets received via HA router. Failover confirmed ~5 seconds.
 
 ---

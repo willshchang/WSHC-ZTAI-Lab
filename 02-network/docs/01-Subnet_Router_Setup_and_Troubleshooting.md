@@ -18,13 +18,13 @@ didn't work, why they failed, and what the correct approach was.
 
 **Lab topology:**
 - **Site A (Cloud):** Azure VM (`tinyco-vm`) — Ubuntu 24.04, 
-  Tailscale IP `100.93.4.6`
+  Tailscale IP `100.x.y.10`
 - **Site B (Home LAN):** Two Apple TVs — HA subnet routers 
   advertising `192.168.1.0/24`
-  - Primary: `iwilltvliving` — ethernet, `100.109.140.74`
-  - Secondary: `iwilltvmaster` — WiFi, `100.122.120.115`
-- **Home network:** Telus fibre modem (`192.168.1.254`) → 
-  ASUS router in AP mode (`192.168.1.59`)
+  - Primary: `tv-primary` — ethernet, `100.x.y.20`
+  - Secondary: `tv-ha` — WiFi, `100.x.y.21`
+- **Home network:** ISP modem (`192.168.1.1`) → 
+  Wi-Fi router in AP mode (`192.168.1.2`)
 
 **Goal:** Azure VM (Site A) reaches non-Tailscale devices on 
 the home LAN (`192.168.1.0/24`) through the Apple TV subnet 
@@ -82,13 +82,13 @@ ip addr show      # Linux (modern)
 | **Double NAT** | Two NAT layers (e.g. modem + router) — blocks WireGuard direct P2P connections |
 
 **Lab network breakdown:**
-- `192.168.1.254` — Telus fibre modem (actual default gateway)
-- `192.168.1.59` — ASUS router in AP mode (WiFi only, not routing)
+- `192.168.1.1` — ISP modem (actual default gateway)
+- `192.168.1.2` — Wi-Fi router in AP mode (WiFi only, not routing)
 - `192.168.1.157` — Windows PC (Tailscale device, direct Tailnet member)
 - `192.168.1.0/24` — full home subnet advertised by Apple TVs
 
-> **Note:** When the ASUS router is in AP mode, the modem 
-> (`192.168.1.254`) is the real gateway — not the typical 
+> **Note:** When the Wi-Fi router is in AP mode, the modem 
+> (`192.168.1.1`) is the real gateway — not the typical 
 > `192.168.1.1`. Always verify with `ipconfig` before 
 > assuming gateway IP.
 
@@ -277,7 +277,7 @@ ping subnet router Tailscale IP first
 → Can you reach the subnet router device itself?
 ↓
 ping device on subnet
-→ 192.168.1.254 (modem), 192.168.1.59 (AP)
+→ 192.168.1.1 (modem), 192.168.1.2 (AP)
 ↓
 If still failing → check ACL policy
 → Is traffic from source to 192.168.1.0/24 permitted?
@@ -487,10 +487,10 @@ for peer in data.get('Peer',{}).values():
 ```
 
 **Expected healthy HA output:**
-iwilltvliving
+tv-primary
 Primary: ['192.168.1.0/24']
 Advertised: []
-iwilltvmaster
+tv-ha
 Primary: []
 Advertised: ['192.168.1.0/24']
 
@@ -560,8 +560,8 @@ the subnet destination.
 
 ## DERP vs Direct Connection
 tailscale status output:
-iwillwindows       active; direct 108.173.x.x:41641
-iwilltvliving      idle; relay: sea
+admin-pc       active; direct <home-public-ip>:41641
+tv-primary      idle; relay: sea
 
 **Direct connection** — P2P WireGuard tunnel. Best performance.
 
@@ -572,7 +572,7 @@ encrypted — DERP only sees encrypted packets, never content.
 **DERP = Detoured Encrypted Routing Protocol**
 
 **Why Apple TV uses DERP in this lab:**
-Double NAT (Telus modem + ASUS AP mode) blocks WireGuard's 
+Double NAT (ISP modem + Wi-Fi AP mode) blocks WireGuard's 
 UDP hole-punching. DERP handles this automatically with no 
 configuration required.
 
@@ -600,18 +600,18 @@ subnet for redundancy.
 
 | Test | Result |
 |---|---|
-| Primary subnet router disabled | `iwilltvmaster` automatically became primary |
-| Ping to `192.168.1.254` after failover | ✅ 4/4 packets received |
-| Connection type | DERP relay Seattle (WiFi + NAT on bedroom Apple TV) |
+| Primary subnet router disabled | `tv-ha` automatically became primary |
+| Ping to `192.168.1.1` after failover | ✅ 4/4 packets received |
+| Connection type | DERP relay Seattle (WiFi + NAT on HA Apple TV) |
 | Client reconfiguration needed | ❌ None — fully automatic |
 | Time to failover | ~5 seconds |
 
 **Perform HA failover test:**
-1. Admin console → `iwilltvliving` → Edit route settings → 
+1. Admin console → `tv-primary` → Edit route settings → 
    uncheck `192.168.1.0/24` → Save
 2. Wait 5 seconds
-3. From Azure VM: `ping -c 4 192.168.1.254`
-4. Restore: re-check `192.168.1.0/24` on `iwilltvliving`
+3. From Azure VM: `ping -c 4 192.168.1.1`
+4. Restore: re-check `192.168.1.0/24` on `tv-primary`
 
 **Production framing:**
 
@@ -685,10 +685,10 @@ for peer in data.get('Peer',{}).values():
 ```
 
 **Example output — lab environment:**
-[PEER] iwilltvliving — tvOS
+[PEER] tv-primary — tvOS
 Primary: ['192.168.1.0/24']
 Advertised: []
-[PEER] iwilltvmaster — tvOS
+[PEER] tv-ha — tvOS
 Primary: []
 Advertised: ['192.168.1.0/24']
 
@@ -703,7 +703,7 @@ Advertised: ['192.168.1.0/24']
 | Empty both | Not a subnet router |
 
 > **Note on display names:** The CLI shows Tailscale hostnames 
-> (e.g. `iwilltvliving`) — not the custom display names set 
+> (e.g. `tv-primary`) — not the custom display names set 
 > in the admin console. For human-readable names, the admin 
 > console **Machines** page remains the clearest reference.
 

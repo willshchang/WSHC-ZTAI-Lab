@@ -13,8 +13,8 @@
 #
 # Why MagicDNS matters:
 # Without MagicDNS, devices are reached by Tailscale IP only
-# e.g. 100.93.4.6. With MagicDNS, devices are reachable by
-# hostname e.g. tinyco-vm.hair-squeaker.ts.net — making the
+# e.g. 100.x.y.10. With MagicDNS, devices are reachable by
+# hostname e.g. tinyco-vm.<tailnet>.ts.net — making the
 # network feel like a real corporate LAN regardless of where
 # devices physically are.
 #

@@ -57,3 +57,25 @@ _private/
 *.pfx
 *.p12
 *.cer
+# ============================================================
+# SAFETY NET — secrets and data outside the folders above
+# ============================================================
+# One `git add .` should never publish an env file, an HR
+# export, a real agent trace or a Terraform plan (plans can
+# hold passwords in clear text). Only sample data is tracked.
+# ============================================================
+.env
+.env.*
+!.env.example
+*.csv
+*.tsv
+*.xlsx
+*.jsonl
+!03-agents/examples/sample-traces/*.jsonl
+*.tfplan
+tfplan
+.npmrc
+id_rsa*
+id_ed25519*
+*.log
+.DS_Store

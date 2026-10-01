@@ -37,12 +37,12 @@ public version control — no sensitive data ever touches GitHub.
 - `oauth_client_secret` — Tailscale OAuth client secret
 
 **Tailnet identity:**
-- `tailnet` — Tailnet name (e.g. `hair-squeaker.ts.net`)
+- `tailnet` — Tailnet name (e.g. `<tailnet>.ts.net`)
 
 **Device DNS names:**
 - `vm_DNSname` — full DNS name of Azure VM
-- `subnet_router_primary_DNSname` — living room Apple TV DNS name
-- `subnet_router_ha_DNSname` — bedroom Apple TV DNS name
+- `subnet_router_primary_DNSname` — primary Apple TV DNS name
+- `subnet_router_ha_DNSname` — HA Apple TV DNS name
 
 > **Important — DNS name vs hostname:**  
 > Some devices (Apple TV, iPhone) return generic hostnames like 
@@ -65,6 +65,7 @@ public version control — no sensitive data ever touches GitHub.
 
 **Identity:**
 - `admin_email` — Tailscale account email for ACL grants
+- `ssh_users` — Linux users the admin may log in as over Tailscale SSH (kept out of the code so no real usernames are published)
 
 **Tags:**
 - `tag_server` — tag for cloud infrastructure (default: `tag:server`)

@@ -73,7 +73,7 @@ locals {
 }
 
 # ============================================================
-# PRIMARY SUBNET ROUTER — Living Room Apple TV
+# PRIMARY SUBNET ROUTER — Primary Apple TV
 # ============================================================
 # Approves the home LAN subnet route advertised by the
 # primary Apple TV subnet router.
@@ -105,7 +105,7 @@ resource "tailscale_device_subnet_routes" "primary" {
 }
 
 # ============================================================
-# HA SUBNET ROUTER — Bedroom Apple TV
+# HA SUBNET ROUTER — HA Apple TV
 # ============================================================
 # Approves the same home LAN subnet route on the secondary
 # Apple TV — enabling automatic HA failover.
@@ -116,7 +116,7 @@ resource "tailscale_device_subnet_routes" "primary" {
 #
 # Failover verified:
 # Disabled primary route in admin console → pinged
-# 192.168.1.254 from Azure VM → 4/4 packets received
+# 192.168.1.1 from Azure VM → 4/4 packets received
 # via HA router within ~5 seconds. Zero client changes.
 #
 # Production note:
@@ -155,6 +155,6 @@ resource "tailscale_device_subnet_routes" "ha" {
 # "
 #
 # Test site-to-site connectivity from Azure VM:
-# ping -c 4 192.168.1.254   # Telus modem
-# ping -c 4 192.168.1.59    # ASUS AP
+# ping -c 4 192.168.1.1   # ISP modem
+# ping -c 4 192.168.1.2    # Wi-Fi AP
 # ============================================================

@@ -70,7 +70,7 @@ then controlled exclusively by ACL grants.
 Tag applied to tinyco-vm
 ↓ immediately
 Access revoked.
-Connection to tinyco-vm.hair-squeaker.ts.net closed.
+Connection to tinyco-vm.<tailnet>.ts.net closed.
 
 This is Zero Trust working correctly — no grace period.
 

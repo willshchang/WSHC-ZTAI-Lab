@@ -1,0 +1,12 @@
+# Weekly update PRs for pinned GitHub Actions (SHA pins) and the
+# agents' npm dependencies. Nothing merges without human review.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: npm
+    directory: /03-agents
+    schedule:
+      interval: weekly

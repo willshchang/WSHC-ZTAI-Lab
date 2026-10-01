@@ -81,7 +81,7 @@ variable "primary_admin_upn" {
 # the existing admin, but doesn't reveal what it is.
 
 variable "breakglass_account_prefix" {
-  description = "The username prefix for the emergency access (break-glass) account (e.g., admin.test)"
+  description = "The username prefix for the emergency access (break-glass) account (e.g., breakglass.admin)"
   type        = string
 }
 
@@ -95,9 +95,11 @@ variable "breakglass_account_prefix" {
 variable "app_urls" {
   description = "A map linking App Keys to their primary FQDNs (e.g., Tailscale addresses)"
   type        = map(string)
-  default = {
-    "mattermost" = "tinyco-vm.tail7ee901.ts.net"
-    "tableau"    = "55fb207b-97b5-4e4a-b3ba-52aabbce0a63/25fa8ac1-2ce8-4476-bd67-572dfba144ae"
-    "elastic"    = "tinyco-prod-cluster-3acb9f.kb.westus2.azure.elastic-cloud.com"
-  }
+  # No default: these are real endpoints, so they live in the
+  # gitignored terraform.tfvars. Example:
+  # app_urls = {
+  #   "mattermost" = "tinyco-vm.<tailnet>.ts.net"
+  #   "tableau"    = "<site-id>/<idp-id>"
+  #   "elastic"    = "<deployment>.kb.<region>.azure.elastic-cloud.com"
+  # }
 }

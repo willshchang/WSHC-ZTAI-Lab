@@ -35,7 +35,7 @@ variable "oauth_client_secret" {
 variable "tailnet" {
   description = "Your Tailnet name — found in tailscale.com/admin/settings/general"
   type        = string
-  # Example: "hair-squeaker.ts.net" or your organisation domain
+  # Example: "example-tailnet.ts.net" or your organisation domain
 }
 
 # ============================================================
@@ -57,13 +57,13 @@ variable "vm_DNSname" {
 variable "subnet_router_primary_DNSname" {
   description = "DNSname of the primary Apple TV subnet router"
   type        = string
-  # Example: "iwilltvliving"
+  # Example: "tv-primary"
 }
 
 variable "subnet_router_ha_DNSname" {
   description = "DNSname of the HA (failover) Apple TV subnet router"
   type        = string
-  # Example: "iwilltvmaster"
+  # Example: "tv-ha"
 }
 
 # ============================================================
@@ -106,7 +106,13 @@ variable "exit_node_enabled" {
 variable "admin_email" {
   description = "Tailscale account email — used in ACL grants and SSH rules"
   type        = string
-  # Example: "will.sh.chang@gmail.com"
+  # Example: "admin@example.com"
+}
+
+variable "ssh_users" {
+  description = "Linux users the admin may log in as over Tailscale SSH"
+  type        = list(string)
+  # Example: ["tinyco-admin", "your-linux-user", "root"]
 }
 
 # ============================================================

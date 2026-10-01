@@ -190,7 +190,7 @@ resource "tailscale_acl" "policy" {
         action = "accept"
         src    = [var.admin_email]
         dst    = [var.tag_server]
-        users  = ["tinyco-admin", "iwill", "root"]
+        users  = var.ssh_users
       }
     ]
 

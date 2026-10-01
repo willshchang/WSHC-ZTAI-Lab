@@ -15,7 +15,7 @@
 #
 # Device cert format:
 # <hostname>.<tailnet-name>.ts.net
-# e.g. tinyco-vm.hair-squeaker.ts.net
+# e.g. tinyco-vm.<tailnet>.ts.net
 #
 # Used in this lab for:
 # - Mattermost HTTPS via Tailscale Serve
@@ -23,7 +23,7 @@
 # - No domain purchase required
 #
 # To provision cert on a device after enabling:
-# sudo tailscale cert tinyco-vm.hair-squeaker.ts.net
+# sudo tailscale cert tinyco-vm.<tailnet>.ts.net
 #
 # Official reference:
 # https://registry.terraform.io/providers/tailscale/tailscale/latest/docs/resources/tailnet_settings

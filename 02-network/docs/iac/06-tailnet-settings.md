@@ -36,7 +36,7 @@ https_enabled = true
 
 Enables Tailscale to provision valid Let's Encrypt TLS certificates 
 per device via MagicDNS hostname:
-tinyco-vm.hair-squeaker.ts.net
+tinyco-vm.<tailnet>.ts.net
 
 Used in this lab for Mattermost HTTPS via Tailscale Serve — 
 eliminates self-signed certificate warnings without purchasing 
@@ -44,7 +44,7 @@ a domain.
 
 **Provision cert on a device after enabling:**
 ```bash
-sudo tailscale cert tinyco-vm.hair-squeaker.ts.net
+sudo tailscale cert tinyco-vm.<tailnet>.ts.net
 ```
 
 > **Requires MagicDNS** — enable in `dns.tf` first.
