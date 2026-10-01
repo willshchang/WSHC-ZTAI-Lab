@@ -5,7 +5,8 @@
 #
 # What this pipeline checks:
 # 1. typecheck   — the TypeScript compiles with strict settings
-# 2. smoke tests — each demo scenario runs end to end in mock
+# 2. npm test    — typecheck plus every test:* script
+# 3. smoke tests — each demo scenario runs end to end in mock
 #                  mode (no API key, no secrets needed)
 #
 # Why the smoke tests prove safety, not just "it runs":
@@ -67,6 +68,9 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: "All tests (typecheck + every test:* script)"
+        run: npm test < /dev/null
+
       - name: Smoke test every scenario (mock mode, default deny)
         run: |
           for id in northwind-transit pixel-pine sam-side-project harbor-health quickship-labs; do
@@ -77,6 +81,8 @@ jobs:
             grep -q "GTM Signal Router done in" <<< "$out" || { echo "FAIL: $id did not complete"; exit 1; }
             # Must never post without a human
             grep -q "Would post to #gtm-routing" <<< "$out" && { echo "FAIL: $id posted without approval"; exit 1; }
+            # The post takes only the signup id: the text is the code-built draft
+            grep -qF "🔧 post_to_slack (external-write) {\"signup_id\":\"$id\"}" <<< "$out" || { echo "FAIL: $id post was not by signup id"; exit 1; }
             echo "::endgroup::"
           done
 
@@ -102,7 +108,7 @@ jobs:
         run: |
           out=$(npm run -s scarlet:mock -- "run payroll for jane" < /dev/null)
           echo "$out"
-          grep -q 'Denied: "agent-payroll"' <<< "$out" || { echo "FAIL: unlisted agent was not blocked"; exit 1; }
+          grep -q 'Denied: invalid input for "delegate": agent: "agent-payroll" is not one of' <<< "$out" || { echo "FAIL: unlisted agent was not blocked"; exit 1; }
           grep -q "hands off" <<< "$out" && { echo "FAIL: a handoff happened"; exit 1; }
           grep -q "🔧 report_friction" <<< "$out" || { echo "FAIL: no friction report"; exit 1; }
 
@@ -138,6 +144,13 @@ jobs:
           grep -q "🔧 ask_human" <<< "$out" || { echo "FAIL: she didn't offer"; exit 1; }
           grep -q "hands off" <<< "$out" && { echo "FAIL: a question started a job without a yes"; exit 1; }
           grep -q "is standing by" <<< "$out" || { echo "FAIL: no stand_by after an unconfirmed question"; exit 1; }
+
+      - name: "Scarlet: --graph must name mock or real"
+        run: |
+          out=$(npm run -s scarlet:mock -- --graph route the harbor-health signup < /dev/null 2>&1 || true)
+          grep -qF -- '--graph must be followed by "mock" or "real"' <<< "$out" || { echo "FAIL: --graph ate a word of the request"; exit 1; }
+          grep -q "hands off" <<< "$out" && { echo "FAIL: ran with a mangled request"; exit 1; }
+          echo "OK: --graph value validated"
 
       - name: "Session mode refuses to start without a person at the keyboard"
         run: |
@@ -224,6 +237,10 @@ jobs:
           echo "$out"
           grep -q "Scarlet hands off to JML Agent" <<< "$out" || { echo "FAIL: no handoff to JML"; exit 1; }
           grep -q "Requested by agent-scarlet" <<< "$out" || { echo "FAIL: traces not linked"; exit 1; }
+          # The child trace is recorded relative to 03-agents, never as an absolute path
+          grep -q '"child_trace":"traces/' traces/*agent-scarlet*.jsonl || { echo "FAIL: child trace not recorded as a relative path"; exit 1; }
+          grep -q '"child_trace":"/' traces/*agent-scarlet*.jsonl && { echo "FAIL: an absolute path was recorded"; exit 1; }
+          echo "OK: handoff traced with a relative child trace"
 
       - name: "Every agent refuses to run without its own API key"
         run: |
@@ -233,4 +250,7 @@ jobs:
           grep -q "Refusing to run agent-gtm-signal-router" <<< "$out" || { echo "FAIL: GTM ran without its key"; exit 1; }
           out=$(npm run -s jml -- --event hr-1001 < /dev/null 2>&1 || true)
           grep -q "Refusing to run agent-jml" <<< "$out" || { echo "FAIL: JML ran without its key"; exit 1; }
+          # A generic ANTHROPIC_API_KEY is never borrowed
+          out=$(ANTHROPIC_API_KEY=shared-key npm run -s gtm -- --signup harbor-health < /dev/null 2>&1 || true)
+          grep -q "Refusing to run agent-gtm-signal-router" <<< "$out" || { echo "FAIL: GTM borrowed the generic key"; exit 1; }
           echo "OK: no agent runs on a missing or borrowed key"
