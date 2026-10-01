@@ -38,7 +38,7 @@ code. Nothing is clicked into existence by hand.
 |---|---|
 | **Layer 1: Identity (Accessibility)** | Fully deployed and validated during the Microsoft 365 E5 trial (late spring 2026). The tenant is still live on Entra ID Free, which runs users, static groups, app registrations and the JML agent. Dynamic groups, Conditional Access and PIM need a paid tier (P1/P2), so those stay in code and docs until a license is back. |
 | **Layer 2: Network (Reachability)** | Live. Tailnet, Azure VM and both subnet routers are running and managed by Terraform. |
-| **Layer 3: AI agents** | Live. Scarlet (coordinator), the GTM Signal Router and the JML agent, each with its own key and tools. JML has run joiners, movers and leavers on the real tenant. CI runs 240+ checks on every push, and every safety control has been broken on purpose in a local mutation sweep to prove a test catches it. |
+| **Layer 3: AI agents** | Live. Scarlet (coordinator), the GTM Signal Router and the JML agent, each with its own key and tools. JML has run joiners, movers and leavers on the real tenant. CI runs 240+ checks on every push that touches the agents, and each tested safety control was broken on purpose in a local mutation sweep to prove a test catches it. |
 
 > **Note:** Layer 1 was originally deployed to the tenant
 > `TinyCoDDG.onmicrosoft.com`. The docs use `<tenant>.onmicrosoft.com`
@@ -129,7 +129,7 @@ structure (groups, apps, ACL), the JML agent owns people. Network detail is in
 |---|---|
 | **ACL Policy as Code** | The network rulebook lives in `acl.tf`: grants, tag ownership and built-in tests. Anything not explicitly allowed is blocked. |
 | **Device tags** | Machines are identified by their job (`tag:server`, `tag:subnet-router`), not by who set them up. |
-| **Tailscale SSH** | Log in to servers with your identity. No SSH keys to manage, and port 22 is closed to the internet. `root` needs a fresh browser sign-in (`check` mode). |
+| **Tailscale SSH** | Log in to servers with your identity. No SSH keys to manage, and port 22 is closed to the internet. `root` needs a browser re-authentication within the last 12 hours (`check` mode). |
 | **ACL tests** | Allow and deny tests run on every `terraform plan`, including proof that the internet-facing VM can't reach the home network. |
 | **Subnet routing** | Reach devices that can't run Tailscale (printers, modems, legacy servers) through a router device. |
 | **High availability** | Two subnet routers advertise the same network. If one goes down, traffic moves to the other with no dropped packets. |
@@ -141,9 +141,9 @@ structure (groups, apps, ACL), the JML agent owns people. Network detail is in
 | Capability | What it does in plain English |
 |---|---|
 | **Terraform, both layers** | Identity and network are managed by the same tool and the same review process. |
-| **Dropzone ETL pipeline** | The script takes the HR files by name, checks headers, teams and names, then stages a clean CSV. A roster guard stops the plan if the file shrinks unexpectedly, so a bad export can't quietly delete users. |
+| **Dropzone ETL pipeline** | The script takes the HR files by name, checks headers, teams and names, then stages a clean CSV. A roster guard stops the plan if the file has fewer rows than a set minimum (`min_expected_employees`), so a truncated export can't quietly delete users. |
 | **Zero hardcode** | All real values live in gitignored `terraform.tfvars` and CSV files. Swap them and the same code deploys to another company. |
-| **CI validation** | GitHub Actions runs `terraform fmt` and `validate` on both layers and the full agent test suite on every push, with read-only permissions and actions pinned to commit SHAs. |
+| **CI validation** | GitHub Actions runs `terraform fmt` and `validate` on both layers and the full agent test suite on every push that touches that layer, with read-only permissions and actions pinned to commit SHAs. |
 
 ---
 
@@ -162,15 +162,15 @@ flowchart LR
     model["Model API<br/>pinned host"]
 
     subgraph RT["Agent runtime"]
-        worker["Worker agent<br/>own key, own tools"]
-        gate{"Engine checks<br/>allowlist, schema,<br/>bound task id"}
+        worker["Worker agent<br/>own key, own tools,<br/>bound to its task id"]
+        gate{"Engine checks<br/>allowlist, schema"}
     end
 
     you(("You<br/>approve or deny"))
-    inside["Read tools,<br/>friction reports"]
+    inside["Read tools; friction reports<br/>and status cards to Slack<br/>(escaped, no approval)"]
 
     subgraph EXT["Outside systems"]
-        entra["Microsoft Graph<br/>protected groups refused"]
+        entra["Microsoft Graph<br/>protected accounts refused"]
         slack["Slack<br/>escaped text"]
     end
 
@@ -182,7 +182,7 @@ flowchart LR
     worker -->|"tool call"| gate
     gate -->|"read or<br/>internal write"| inside
     gate -->|"external write:<br/>exact text shown"| you
-    you -->|"approved bytes only"| EXT
+    you -->|"approved draft or plan only"| EXT
     gate -.->|"every step"| trace
 ```
 
@@ -216,13 +216,13 @@ flowchart LR
 
 1. HR adds the person to the export with their team
 2. The ETL script checks the file and stages it
-3. `terraform plan` is reviewed (the roster guard stops a shrunken file), then `apply` creates the Entra ID account with the `department` attribute set
+3. `terraform plan` is reviewed (the roster guard stops a file below the minimum headcount), then `apply` creates the Entra ID account with the `department` attribute set
 4. The dynamic group for that department picks the user up automatically (P1)
 5. The group's app assignments give them SSO access to their team's apps, with MFA from Conditional Access (P1)
 6. On the tailnet, the ACL policy decides which machines they can reach
 
-Steps 4 and 5 need Entra ID P1. On today's Free tenant, users are assigned
-to apps directly. See [Licensing](./01-identity/README.md#licensing-what-needs-entra-id-p1).
+Steps 4 and 5 need Entra ID P1. On today's Free tenant, app access needs
+direct user assignment. See [Licensing](./01-identity/README.md#licensing-what-needs-entra-id-p1).
 
 ---
 
@@ -232,7 +232,7 @@ Mapped to the tenets in NIST SP 800-207:
 
 | Principle | How this lab implements it |
 |---|---|
-| Every access request is authenticated and authorised | Entra ID SSO with MFA for apps, Tailscale identity and the ACL on every network connection, and a policy check plus human approval on every agent action |
+| Every access request is authenticated and authorised | Entra ID SSO with MFA for apps, Tailscale identity and the ACL on every network connection, a policy check on every agent tool call, and human approval on every external write |
 | Least privilege | Role and app access by group, network access by explicit grant, implicit deny for everything else |
 | Access is decided per request, from identity and policy | Tailscale evaluates the ACL policy for each connection, not once at login |
 | Network location grants nothing | No "inside" network. Port 22 closed. Being on the tailnet alone gives no access. |
