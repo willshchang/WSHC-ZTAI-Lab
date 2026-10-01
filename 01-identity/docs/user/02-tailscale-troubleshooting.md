@@ -17,6 +17,10 @@ or email `itops@<tenant>.onmicrosoft.com`.
 
 ---
 
+> **Lab status:** the "Sign in with Microsoft" steps below describe 
+> the target setup. The lab tailnet does not use Entra ID as its 
+> identity provider yet; moving it to Entra ID is a planned step.
+
 ## Quick Checklist
 
 Before contacting ITOps, run through this checklist:

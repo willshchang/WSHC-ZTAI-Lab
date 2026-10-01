@@ -33,7 +33,7 @@ SaaS platforms, and network-level Zero Trust enforcement via Tailscale.
 | **Self-Healing Provisioning** | HR CSV → ETL pipeline → Terraform → Entra → auto group assignment |
 | **SSO Integrations** | SAML + OIDC across Tailscale, Mattermost, Tableau, Elastic |
 | **SCIM Provisioning** | Automated user lifecycle management via Tableau SCIM |
-| **Security Model** | Conditional Access, MFA enforcement, least privilege RBAC |
+| **Security Model** | Conditional Access (MFA, legacy auth block), break-glass account, least privilege RBAC. See [Licensing](#licensing-what-needs-entra-id-p1) for what is live on the current Free tenant |
 | **Linux Administration** | Azure VM, Docker, Tailscale VPN, SSH hardening |
 
 ---
@@ -44,13 +44,19 @@ SaaS platforms, and network-level Zero Trust enforcement via Tailscale.
 
 **Layer 1 — Identity (Entra ID SSO)**  
 Cloud SaaS applications (Tableau, Elastic) are protected by Entra ID 
-SSO via SAML or OIDC. MFA is enforced on every sign-in via 
-Conditional Access.
+SSO via SAML or OIDC. Only users and groups assigned to an app can 
+get a token for it. MFA was enforced on every sign-in via 
+Conditional Access while the tenant had E5; the policies still 
+exist but are frozen on the current Free tier (see 
+[Licensing](#licensing-what-needs-entra-id-p1)).
 
 **Layer 2 — Network (Tailscale)**  
 Internal resources (Azure VM, Mattermost) are unreachable from the 
 public internet. SSH port 22 is closed. Access requires an active 
-Tailscale VPN connection authenticated via Entra ID.
+Tailscale connection. Today the tailnet admin signs in to Tailscale 
+with a personal identity provider, not Entra ID, so Entra 
+Conditional Access and MFA do not gate the tailnet yet. Moving the 
+tailnet to Entra ID as its identity provider is a planned step.
 
 ![Security Architecture](../docs/diagrams/tinyco_security_architecture.png)
 
@@ -66,7 +72,7 @@ From HR data to app access — fully automated:
 
 | Layer | Technology |
 |---|---|
-| **Identity** | Microsoft Entra ID (E5) |
+| **Identity** | Microsoft Entra ID (built and validated on an E5 trial; Free tier since the trial ended) |
 | **IaC** | Terraform (azuread + azurerm providers) |
 | **Network** | Tailscale (Zero Trust VPN, exit node) |
 | **VM** | Azure (Ubuntu 24.04, Standard B2s, Canada Central) |
@@ -91,8 +97,9 @@ From HR data to app access — fully automated:
 │   ├── providers.tf              ← Azure + Entra provider config
 │   ├── variables.tf              ← Variable definitions (zero hardcoded values)
 │   ├── terraform.tfvars         ← Values (gitignored)
-│   ├── users.tf                  ← CSV-driven user provisioning
+│   ├── users.tf                  ← CSV-driven users, roster guard, break-glass account + Global Admin
 │   ├── groups.tf                 ← Dynamic ABAC groups + static admin groups
+│   ├── jml.tf                    ← Static groups for the JML agent (Layer 3)
 │   ├── rbac.tf                   ← Role assignments + app access matrix
 │   ├── conditional-access.tf     ← MFA + legacy auth policies
 │   ├── tailscale.tf              ← Tailscale app reference
@@ -116,8 +123,10 @@ From HR data to app access — fully automated:
 ## Key Design Decisions
 
 ### Zero-Hardcode Architecture
-No employee names, team names, or company data exists in any `.tf` 
-file. All identity data flows from gitignored CSV files — mirroring 
+No employee names or company data exists in any `.tf` file, and the 
+only team name in code is the admin team (`local.admin_team = "ITOps"` 
+in `groups.tf`, which `entra_role_map` is validated against). All 
+identity data flows from gitignored CSV files — mirroring 
 a production HR system SCIM feed. Swap the CSV and the entire 
 codebase deploys for any organisation.
 
@@ -125,7 +134,9 @@ codebase deploys for any organisation.
 Group membership is driven by Entra's ABAC engine, not manual 
 Terraform assignments. Change a user's `department` attribute → 
 Entra automatically moves them between groups within 5–15 minutes. 
-No `terraform apply` needed for routine HR changes.
+No `terraform apply` needed for routine HR changes. Dynamic 
+membership needs Entra ID P1 (see 
+[Licensing](#licensing-what-needs-entra-id-p1)).
 
 ### setproduct RBAC Matrix
 A single Terraform loop manages all group-to-app assignments using 
@@ -138,11 +149,42 @@ protocols and permissions. Custom registrations default to OIDC —
 incompatible with many SaaS SAML implementations. Always search 
 the gallery first.
 
-### Dropzone ETL Pipeline
-HR CSV exports use a staged dropzone architecture — files are 
-explicitly placed in `incoming/` by an admin, sanitised by the 
-ETL script, then staged in `data/` for Terraform. No wildcard 
-searches, no accidental mass deprovisioning risk.
+### Validated ETL Pipeline and Roster Guard
+The admin passes the two HR exports to the ETL script by name 
+(`00-hr-data-etl.sh <employees.csv> <teams.csv>`). The script 
+checks headers, field counts, names, duplicates and team values, 
+and only replaces `data/` when both files pass. It never deletes 
+the source files.
+
+Removing a row from `data/employees.csv` **deletes** that Entra 
+account on the next apply. Two guards reduce the risk of a bad 
+file: the ETL script reports how many rows were removed, and 
+Terraform refuses to plan when the roster has fewer rows than 
+`min_expected_employees`. Always read the deletes in 
+`terraform plan` before applying.
+
+---
+
+## Licensing: what needs Entra ID P1
+
+The code was built and validated during a Microsoft 365 E5 trial. 
+The trial has ended and the tenant is now on **Entra ID Free**. 
+Several features this code uses need **Entra ID P1** (included in 
+E3/E5 and Business Premium):
+
+| Feature | Used in | License needed | Status on the current Free tenant |
+|---|---|---|---|
+| Conditional Access (require MFA, block legacy auth) | `conditional-access.tf` | P1 ([source](https://learn.microsoft.com/en-us/entra/identity/conditional-access/overview#license-requirements)) | The two policies still exist and are not disabled, but they are frozen: Microsoft allows view and delete only, not update. Any Terraform change to them fails on apply. |
+| Dynamic membership groups (team groups) | `groups.tf` | P1 for every member ([source](https://learn.microsoft.com/en-us/entra/identity/users/groups-dynamic-membership#license-requirements)) | Not licensed. `jml.tf` records that the rules stopped being processed after the trial, so team membership is not kept current. |
+| Group-based app assignment (team groups to the 4 core apps) | `rbac.tf` | P1 or P2 ([source](https://learn.microsoft.com/en-us/entra/identity/enterprise-apps/assign-user-or-group-access-portal)) | Not licensed. On Free, apps can be assigned to individual users only. |
+| Role-assignable groups (`assignable_to_role`) | `groups.tf`, `rbac.tf` | P1 ([source](https://learn.microsoft.com/en-us/entra/identity/role-based-access-control/groups-concept#license-requirements)) | Not licensed. The groups and their role assignments were created during the trial. |
+| Direct role assignment to a user (break-glass Global Admin) | `users.tf` | Free | Works. |
+| Users, app registrations, service principals, `app_role_assignment_required` | all | Free | Works. |
+| PIM, access reviews (production recommendations only) | not used | P2 / ID Governance | Not used. |
+
+**Suggestion (not implemented, owner's call):** an `entra_premium` 
+feature flag that skips or replaces the P1-only resources when the 
+tenant has no P1, so `terraform plan` on a Free tenant stays clean.
 
 ---
 
@@ -165,7 +207,8 @@ searches, no accidental mass deprovisioning risk.
 - Employee CSV data is gitignored — never committed to version control
 - `terraform.tfvars` is gitignored — all secrets stay local
 - SSH port 22 is closed to the public internet — VM accessible via Tailscale only
-- All app access enforced via Entra ID group assignments and Conditional Access
+- SAML apps require an app role assignment (`app_role_assignment_required = true`), so unassigned users and guests cannot get a token. Group-based assignment needs Entra ID P1 (see [Licensing](#licensing-what-needs-entra-id-p1))
+- Break-glass account: own password, no department (not in any team group), permanent active Global Administrator, protected by `prevent_destroy`. See [02-security-model.md](./docs/admin/02-security-model.md#break-glass-account) for the manual steps (FIDO2 passkey or certificate-based auth, sign-in alert)
 
 ---
 
