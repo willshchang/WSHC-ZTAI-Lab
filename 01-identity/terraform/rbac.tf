@@ -70,9 +70,14 @@ locals {
 # ============================================================
 # ENFORCEMENT: The Bulk Role Assignment Loop
 # ============================================================
-# This loop executes 36 times (once for every group/app combo).
+# One assignment per team/app pair: (teams in the CSV) x (4 apps).
+# With the lab's 9 teams that is 36 assignments.
 # It grabs the correct Group, App, and Role, and binds them together.
-# 4. The Action: Executes the 36 assignments using the Matrix data
+# 4. The Action: Executes the assignments using the Matrix data
+#
+# LICENSING: assigning a GROUP to an enterprise app needs Entra ID
+# P1. On the current Free tenant, group assignment is not licensed.
+# https://learn.microsoft.com/en-us/entra/identity/enterprise-apps/assign-user-or-group-access-portal
 
 resource "azuread_app_role_assignment" "app_access" {
   for_each = local.group_app_pairs

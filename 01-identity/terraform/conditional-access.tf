@@ -3,8 +3,15 @@
 #
 # Conditional Access is Entra's "if this, then that" security engine.
 #
-# IMPORTANT: Security Defaults must be disabled in the Azure Portal 
+# IMPORTANT: Security Defaults must be disabled in the Azure Portal
 # before these policies can take effect.
+#
+# LICENSING: Conditional Access needs Entra ID P1. The tenant is on
+# Entra ID Free since the E5 trial ended. Microsoft keeps existing
+# policies in place when the license expires, but they can only be
+# viewed or deleted, not updated. Any change to these two resources
+# will therefore fail on apply until P1 is back.
+# https://learn.microsoft.com/en-us/entra/identity/conditional-access/overview#license-requirements
 
 # ============================================================
 # POLICY 1 — Require MFA (With Group Exclusion)
