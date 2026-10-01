@@ -14,14 +14,44 @@ locals {
   # 2. Extract every single 'team' value from that CSV.
   # 3. Use 'distinct()' to filter out duplicates, leaving a clean list of unique departments.
   unique_teams = distinct([for emp in local.employees_raw : emp.team])
+
+  # The one team name the code must know: the primary admin joins
+  # this team's static admin group below. variables.tf validates
+  # that entra_role_map has this key, so keep the two in sync.
+  admin_team = "ITOps"
+}
+
+# ============================================================
+# ROLE MAP SANITY CHECK (WARNING ONLY)
+# ============================================================
+# rbac.tf and the admin group bridge silently skip role map keys
+# that match no CSV team, so a typo ("SecOps" for "Security")
+# would quietly grant nothing. This check prints a warning in
+# plan and apply without blocking them.
+# ============================================================
+
+check "role_map_teams" {
+  assert {
+    condition = alltrue([
+      for team in concat(keys(var.entra_role_map), keys(var.azure_role_map)) :
+      contains(local.unique_teams, team)
+    ])
+    error_message = "entra_role_map or azure_role_map has a key that matches no team in data/employees.csv. Role map keys must match CSV team names exactly."
+  }
 }
 
 # ============================================================
 # DYNAMIC GROUP CREATION (THE "SELF-HEALING" LAYER)
 # ============================================================
 # Instead of Terraform manually writing names onto a guest list (Static),
-# we tell Entra ID to enforce a dress code (Dynamic). 
+# we tell Entra ID to enforce a dress code (Dynamic).
 # If a user's department attribute matches the group name, they are in.
+#
+# LICENSING: dynamic membership needs Entra ID P1 for every member.
+# The tenant is on Entra ID Free since the E5 trial ended, so
+# membership rules are not a feature it is licensed for. See the
+# licensing matrix in 01-identity/README.md.
+# https://learn.microsoft.com/en-us/entra/identity/users/groups-dynamic-membership#license-requirements
 # ============================================================
 
 resource "azuread_group" "teams" {
@@ -37,10 +67,10 @@ resource "azuread_group" "teams" {
   types = ["DynamicMembership"]
 
   # The Rule: "If the user's Entra 'department' field equals this group's name, add them."
-  # NEW SYNTAX: The rule and processing state are now wrapped in this block
+  # enabled = true turns rule processing on for the group.
   dynamic_membership {
-    enabled = true                                      # This replaces processing_state = "On"
-    rule    = "(user.department -eq \"${each.value}\")" # This replaces membership_rule
+    enabled = true
+    rule    = "(user.department -eq \"${each.value}\")"
   }
 }
 
@@ -111,6 +141,6 @@ resource "azuread_group_member" "csv_admin_members" {
 # 2. Add YOU (The Primary Admin) to the Static ITOps Group
 # Since you were created outside the CSV, we map you explicitly.
 resource "azuread_group_member" "primary_admin_itops" {
-  group_object_id  = azuread_group.admin_groups["ITOps"].object_id
+  group_object_id  = azuread_group.admin_groups[local.admin_team].object_id
   member_object_id = data.azuread_user.primary_admin.object_id
 }
