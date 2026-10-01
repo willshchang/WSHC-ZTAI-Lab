@@ -58,13 +58,54 @@ with a personal identity provider, not Entra ID, so Entra
 Conditional Access and MFA do not gate the tailnet yet. Moving the 
 tailnet to Entra ID as its identity provider is a planned step.
 
-![Security Architecture](../docs/diagrams/tinyco_security_architecture.png)
+```mermaid
+%%{init: {"flowchart": {"htmlLabels": false}}}%%
+flowchart TB
+    subgraph ENTRA["Entra ID · identity foundation"]
+        direction LR
+        users["Users<br/>from the HR CSV"]
+        groups["Team groups<br/>dynamic, P1"]
+        ca["Conditional Access<br/>MFA, no legacy auth, P1"]
+        roles["Admin roles<br/>static role groups"]
+        bg["Break-glass<br/>own credential,<br/>excluded from CA"]
+    end
+
+    subgraph APPS["SSO apps · assignment required"]
+        direction LR
+        mm["Mattermost<br/>SAML, on the VM"]
+        tb["Tableau Cloud<br/>SAML and SCIM"]
+        el["Elastic Cloud<br/>SAML, JIT accounts"]
+    end
+
+    vm["Azure VM<br/>port 22 closed,<br/>reached over the tailnet"]
+
+    users --> groups
+    groups -->|"app assignment"| APPS
+    ca -->|"every sign-in"| APPS
+    mm --- vm
+```
 
 ### Identity Journey
 
 From HR data to app access — fully automated:
 
-![Identity Journey](../docs/diagrams/tinyco_identity_journey.png)
+```mermaid
+%%{init: {"flowchart": {"htmlLabels": false}}}%%
+flowchart LR
+    hr["HR export<br/>explicit files"]
+    etl["ETL script<br/>checks headers,<br/>teams, names"]
+    plan{"terraform plan<br/>roster guard"}
+    user["Entra account<br/>department set"]
+    grp["Team group<br/>dynamic rule"]
+    apps["SSO apps<br/>assignment required"]
+
+    hr --> etl
+    etl -->|"staged CSV"| plan
+    plan -->|"human review,<br/>then apply"| user
+    user -->|"P1"| grp
+    grp -->|"group assignment, P1"| apps
+    user -.->|"MFA through<br/>Conditional Access, P1"| apps
+```
 
 ---
 

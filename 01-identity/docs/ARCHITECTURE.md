@@ -99,7 +99,23 @@ SCIM sync (Tableau only, ~40 min)
 ↓ account pre-created before first login
 Full access granted
 ```
-![TinyCo Identity Journey](../../docs/diagrams/tinyco_identity_journey.png)
+```mermaid
+%%{init: {"flowchart": {"htmlLabels": false}}}%%
+flowchart LR
+    hr["HR export<br/>explicit files"]
+    etl["ETL script<br/>checks headers,<br/>teams, names"]
+    plan{"terraform plan<br/>roster guard"}
+    user["Entra account<br/>department set"]
+    grp["Team group<br/>dynamic rule"]
+    apps["SSO apps<br/>assignment required"]
+
+    hr --> etl
+    etl -->|"staged CSV"| plan
+    plan -->|"human review,<br/>then apply"| user
+    user -->|"P1"| grp
+    grp -->|"group assignment, P1"| apps
+    user -.->|"MFA through<br/>Conditional Access, P1"| apps
+```
 
 ---
 

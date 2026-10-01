@@ -4,7 +4,7 @@
 
 **Document Type:** Repository Overview  
 **Author:** Will Chang, Zero Trust AI Engineer  
-**Last Updated:** September 2026  
+**Last Updated:** October 2026  
 **Repository:** https://github.com/willshchang/WSHC-ZTAI-Lab  
 
 ---
@@ -38,7 +38,7 @@ code. Nothing is clicked into existence by hand.
 |---|---|
 | **Layer 1: Identity (Accessibility)** | Fully deployed and validated during the Microsoft 365 E5 trial (late spring 2026). The tenant is still live on Entra ID Free, which runs users, static groups, app registrations and the JML agent. Dynamic groups, Conditional Access and PIM need a paid tier (P1/P2), so those stay in code and docs until a license is back. |
 | **Layer 2: Network (Reachability)** | Live. Tailnet, Azure VM and both subnet routers are running and managed by Terraform. |
-| **Layer 3: AI agents** | Live. Scarlet (coordinator), the GTM Signal Router and the JML agent, each with its own key and tools. JML has run joiners, movers and leavers on the real tenant. CI breaks every safety control on purpose to prove the tests catch it. |
+| **Layer 3: AI agents** | Live. Scarlet (coordinator), the GTM Signal Router and the JML agent, each with its own key and tools. JML has run joiners, movers and leavers on the real tenant. CI runs 240+ checks on every push, and every safety control has been broken on purpose in a local mutation sweep to prove a test catches it. |
 
 > **Note:** Layer 1 was originally deployed to the tenant
 > `TinyCoDDG.onmicrosoft.com`. The docs use `<tenant>.onmicrosoft.com`
@@ -95,15 +95,15 @@ flowchart TB
     end
 
     person -->|"signs in"| sso
-    sso -->|"Tailscale login"| acl
+    person -->|"tailnet login"| acl
     acl -->|"only what's granted"| devices
     scarlet -->|"contract"| gtm
     scarlet -->|"contract"| jml
     jml -->|"Microsoft Graph<br/>human approval"| users
 ```
 
-A person passes identity, then the network policy, before reaching any
-machine. The agents act on the identity layer only through Microsoft Graph
+A person signs in to the apps through identity, and to the tailnet, where the
+network policy decides which machines they can reach. The agents act on the identity layer only through Microsoft Graph
 with five least-privilege permissions and a human approval. Terraform and
 GitHub Actions build and check every layer as code: Terraform owns the
 structure (groups, apps, ACL), the JML agent owns people. Network detail is in
@@ -117,10 +117,11 @@ structure (groups, apps, ACL), the JML agent owns people. Network detail is in
 | **CSV-driven provisioning** | 90 users created from an HR export. No names or company data in the code. |
 | **ABAC dynamic groups** | Group membership follows the user's `department` attribute. Change the department, the access follows automatically. |
 | **RBAC** | Roles granted to groups, never directly to people. One `setproduct()` loop assigns every group to every app it needs. |
-| **Conditional Access** | MFA required for everyone. Legacy authentication (the old protocols that can't do MFA) is blocked. |
+| **Conditional Access** | MFA required for everyone. Legacy authentication (the old protocols that can't do MFA) is blocked. Needs Entra ID P1: the policies are in code, and frozen on today's Free tenant. |
 | **SSO** | Single sign-on to Tailscale (OIDC), Mattermost, Tableau and Elastic (SAML). |
 | **SCIM** | Tableau accounts are created and removed automatically from Entra. |
-| **Privileged Access (foundations)** | Admin roles only through dedicated role-assignable groups. Break-glass account with a group-based Conditional Access exclusion. |
+| **Privileged Access (foundations)** | Admin roles only through dedicated role-assignable groups. Break-glass account with its own credential, a direct permanent Global Administrator role, a group-based Conditional Access exclusion and protection from deletion. |
+| **App assignment required** | SSO apps issue a token only to users or groups assigned to them, never to anyone who happens to be in the tenant. |
 
 ### Layer 2: Network, Reachability (Tailscale)
 
@@ -128,7 +129,8 @@ structure (groups, apps, ACL), the JML agent owns people. Network detail is in
 |---|---|
 | **ACL Policy as Code** | The network rulebook lives in `acl.tf`: grants, tag ownership and built-in tests. Anything not explicitly allowed is blocked. |
 | **Device tags** | Machines are identified by their job (`tag:server`, `tag:subnet-router`), not by who set them up. |
-| **Tailscale SSH** | Log in to servers with your identity. No SSH keys to manage, and port 22 is closed to the internet. |
+| **Tailscale SSH** | Log in to servers with your identity. No SSH keys to manage, and port 22 is closed to the internet. `root` needs a fresh browser sign-in (`check` mode). |
+| **ACL tests** | Allow and deny tests run on every `terraform plan`, including proof that the internet-facing VM can't reach the home network. |
 | **Subnet routing** | Reach devices that can't run Tailscale (printers, modems, legacy servers) through a router device. |
 | **High availability** | Two subnet routers advertise the same network. If one goes down, traffic moves to the other with no dropped packets. |
 | **Exit nodes** | Route internet traffic through a trusted device on the tailnet. |
@@ -139,9 +141,54 @@ structure (groups, apps, ACL), the JML agent owns people. Network detail is in
 | Capability | What it does in plain English |
 |---|---|
 | **Terraform, both layers** | Identity and network are managed by the same tool and the same review process. |
-| **Dropzone ETL pipeline** | HR files are placed in `incoming/`, cleaned by a script, then staged for Terraform. Prevents a bad file from mass-deleting users. |
+| **Dropzone ETL pipeline** | The script takes the HR files by name, checks headers, teams and names, then stages a clean CSV. A roster guard stops the plan if the file shrinks unexpectedly, so a bad export can't quietly delete users. |
 | **Zero hardcode** | All real values live in gitignored `terraform.tfvars` and CSV files. Swap them and the same code deploys to another company. |
-| **CI validation** | GitHub Actions checks formatting and syntax on every push. |
+| **CI validation** | GitHub Actions runs `terraform fmt` and `validate` on both layers and the full agent test suite on every push, with read-only permissions and actions pinned to commit SHAs. |
+
+---
+
+## Security Model
+
+How an agent's action is checked before it touches anything real. Customer
+and HR data are treated as data, never as instructions. Every tool call goes
+through the engine's checks, every external write waits for a human who sees
+exactly what will be sent, and every step is traced with the agent's identity.
+
+```mermaid
+%%{init: {"flowchart": {"htmlLabels": false}}}%%
+flowchart LR
+    data["Untrusted input<br/>signups, HR events"]
+    scarlet["Scarlet<br/>routes, no data tools"]
+    model["Model API<br/>pinned host"]
+
+    subgraph RT["Agent runtime"]
+        worker["Worker agent<br/>own key, own tools"]
+        gate{"Engine checks<br/>allowlist, schema,<br/>bound task id"}
+    end
+
+    you(("You<br/>approve or deny"))
+    inside["Read tools,<br/>friction reports"]
+
+    subgraph EXT["Outside systems"]
+        entra["Microsoft Graph<br/>protected groups refused"]
+        slack["Slack<br/>escaped text"]
+    end
+
+    trace[("Trace<br/>identity stamped last")]
+
+    data -->|"data, not orders"| worker
+    scarlet -->|"contract"| worker
+    worker <-->|"per-agent key"| model
+    worker -->|"tool call"| gate
+    gate -->|"read or<br/>internal write"| inside
+    gate -->|"external write:<br/>exact text shown"| you
+    you -->|"approved bytes only"| EXT
+    gate -.->|"every step"| trace
+```
+
+Each control, the threat it answers (mapped to the OWASP Top 10 for LLM and
+Agentic Applications), its status and the test that proves it are in the
+[threat model](./docs/THREAT_MODEL.md). Known gaps are listed there too.
 
 ---
 
@@ -149,14 +196,33 @@ structure (groups, apps, ACL), the JML agent owns people. Network detail is in
 
 How a new hire goes from an HR record to working access:
 
-![TinyCo Identity Journey](./docs/diagrams/tinyco_identity_journey.png)
+```mermaid
+%%{init: {"flowchart": {"htmlLabels": false}}}%%
+flowchart LR
+    hr["HR export<br/>explicit files"]
+    etl["ETL script<br/>checks headers,<br/>teams, names"]
+    plan{"terraform plan<br/>roster guard"}
+    user["Entra account<br/>department set"]
+    grp["Team group<br/>dynamic rule"]
+    apps["SSO apps<br/>assignment required"]
+
+    hr --> etl
+    etl -->|"staged CSV"| plan
+    plan -->|"human review,<br/>then apply"| user
+    user -->|"P1"| grp
+    grp -->|"group assignment, P1"| apps
+    user -.->|"MFA through<br/>Conditional Access, P1"| apps
+```
 
 1. HR adds the person to the export with their team
-2. The ETL script cleans the file and stages it
-3. `terraform apply` creates the Entra ID account with the `department` attribute set
-4. The dynamic group for that department picks the user up automatically
-5. The group's app assignments give them SSO access to their team's apps
-6. Signing in to Tailscale through Entra puts them on the network, where the ACL policy decides what they can reach
+2. The ETL script checks the file and stages it
+3. `terraform plan` is reviewed (the roster guard stops a shrunken file), then `apply` creates the Entra ID account with the `department` attribute set
+4. The dynamic group for that department picks the user up automatically (P1)
+5. The group's app assignments give them SSO access to their team's apps, with MFA from Conditional Access (P1)
+6. On the tailnet, the ACL policy decides which machines they can reach
+
+Steps 4 and 5 need Entra ID P1. On today's Free tenant, users are assigned
+to apps directly. See [Licensing](./01-identity/README.md#licensing-what-needs-entra-id-p1).
 
 ---
 
@@ -166,7 +232,7 @@ Mapped to the tenets in NIST SP 800-207:
 
 | Principle | How this lab implements it |
 |---|---|
-| Every access request is authenticated and authorised | Entra ID SSO with MFA, then Tailscale ACL on every connection |
+| Every access request is authenticated and authorised | Entra ID SSO with MFA for apps, Tailscale identity and the ACL on every network connection, and a policy check plus human approval on every agent action |
 | Least privilege | Role and app access by group, network access by explicit grant, implicit deny for everything else |
 | Access is decided per request, from identity and policy | Tailscale evaluates the ACL policy for each connection, not once at login |
 | Network location grants nothing | No "inside" network. Port 22 closed. Being on the tailnet alone gives no access. |
@@ -180,8 +246,9 @@ Mapped to the tenets in NIST SP 800-207:
 WSHC-ZTAI-Lab/
 │
 ├── README.md                ← you are here
+├── SECURITY.md              ← how to report a vulnerability
 ├── docs/
-│   └── diagrams/            ← architecture diagrams for both layers
+│   └── THREAT_MODEL.md      ← threats, controls, status and proof
 │
 ├── 01-identity/             ← Layer 1: Identity, Accessibility (Entra ID)
 │   ├── README.md
@@ -198,8 +265,9 @@ WSHC-ZTAI-Lab/
 ├── 03-agents/               ← Layer 3: Zero Trust AI agents (in progress)
 │   ├── core/                ← shared agent engine: policy, approval, trace
 │   ├── gtm-signal-router/   ← first agent: routes signups, human-approved
-│   ├── scarlet/             ← coordinator: routes requests to agents, holds no tools
-│   └── jml/                 ← joiner/mover/leaver on Entra ID, human-approved
+│   ├── scarlet/             ← coordinator: routes requests to agents, holds no data tools
+│   ├── jml/                 ← joiner/mover/leaver on Entra ID, human-approved
+│   └── examples/            ← sample traces and how to investigate with them
 │
 └── .github/workflows/       ← CI: Terraform validation + agent checks
 ```
@@ -258,7 +326,7 @@ real deployment.
 | Entra ID users, groups, roles, CA policies, app registrations | Creating the tenant and the Terraform service principal |
 | Tailscale ACL policy, tags, DNS, HTTPS certs | Installing Tailscale on each device |
 | Subnet route approvals | Turning on subnet routing on the Apple TVs |
-| Auth key generation | Running `tailscale up --authkey=...` on the server |
+| Auth key generation | Running `tailscale up --auth-key=file:<path>` on the server |
 | Tailscale SSH access rules | Turning on Tailscale SSH per machine (`sudo tailscale set --ssh`) |
 
 ---
@@ -298,6 +366,9 @@ terraform apply
 | Subnet routing and HA | [01-Subnet_Router_Setup_and_Troubleshooting.md](./02-network/docs/01-Subnet_Router_Setup_and_Troubleshooting.md) |
 | Tailscale SSH | [04-Tailscale_SSH_Setup_and_Troubleshooting.md](./02-network/docs/04-Tailscale_SSH_Setup_and_Troubleshooting.md) |
 | Network Terraform, file by file | [02-network/docs/iac/](./02-network/docs/iac/) |
+| AI agents: design, controls and how to run them | [03-agents/README.md](./03-agents/README.md) |
+| Investigating an agent incident from its traces | [sample-traces/README.md](./03-agents/examples/sample-traces/README.md) |
+| Threats, controls, status and proof | [THREAT_MODEL.md](./docs/THREAT_MODEL.md) |
 
 ---
 
@@ -306,8 +377,8 @@ terraform apply
 | Item | Why it matters |
 |---|---|
 | **PIM just-in-time roles** | Admins request elevation for a set time with approval, instead of holding permanent admin rights |
-| **Tailscale SSH `check` mode** | Forces a fresh identity check before a privileged SSH session |
-| **Terraform remote state** | Shared, locked state for team use instead of a local state file |
+| **Terraform remote state** | Shared, locked, encrypted state instead of a local state file (state holds passwords and keys) |
+| **Tailnet on Entra ID** | Tailnet sign-in through Entra ID, with SCIM groups in the ACL, so one identity provider and one MFA policy gate both layers |
 | **Automated access reviews** | Scheduled review of who still needs what |
 | **`03-agents/`** (in progress) | Extend the same identity and network controls to AI agents: scoped identities per agent, least-privilege tool access, human approval, traces. Built: [GTM Signal Router](./03-agents/README.md), the Scarlet coordinator and the JML agent (Entra ID, least-privilege Graph permissions), each with its own API key. Next: split JML per event type, secretless identity, network-level containment |
 | **Agent observability** | Follow every agent run end to end and live: what triggered it, what it decided, which identity it used, what it touched and the outcome. One OpenTelemetry trace per run, identity on every span, secrets redacted before storage. Today the lab has visibility only (Tailscale configuration audit logs); network flow logs require a Tailscale Premium or Enterprise plan. |
@@ -318,11 +389,12 @@ terraform apply
 
 | Area | Technology |
 |---|---|
-| Identity | Microsoft Entra ID (M365 E5 trial) |
+| Identity | Microsoft Entra ID (built for P1/P2, validated on an M365 E5 trial, now on Free) |
 | Network | Tailscale |
 | IaC | Terraform (`azuread`, `azurerm`, `tailscale` providers) |
 | Compute | Azure VM, Ubuntu 24.04, Canada Central |
 | SaaS (SSO) | Mattermost, Tableau Cloud, Elastic Cloud |
+| Agents | TypeScript, Node.js, Claude (one API key per agent) |
 | Automation | Bash, GitHub Actions |
 
 ---
@@ -333,6 +405,7 @@ terraform apply
 - HR CSV files, `terraform.tfvars`, certificates and keys are gitignored
 - SSH port 22 is closed to the public internet; server access is through Tailscale SSH only
 - Network policy is default deny; only explicit grants allow traffic
+- Threats, controls and known gaps: [THREAT_MODEL.md](./docs/THREAT_MODEL.md). To report a vulnerability: [SECURITY.md](./SECURITY.md)
 
 ---
 
@@ -341,6 +414,8 @@ terraform apply
 | Topic | URL |
 |---|---|
 | NIST SP 800-207 Zero Trust Architecture | https://csrc.nist.gov/pubs/sp/800/207/final |
+| OWASP Top 10 for LLM Applications (2025) | https://genai.owasp.org/initiatives/top-10-for-llm-and-genai/ |
+| OWASP Top 10 for Agentic Applications | https://genai.owasp.org/2025/12/09/owasp-top-10-for-agentic-applications-the-benchmark-for-agentic-security-in-the-age-of-autonomous-ai/ |
 | Microsoft Entra ID documentation | https://learn.microsoft.com/en-us/entra/identity/ |
 | Entra dynamic groups | https://learn.microsoft.com/en-us/entra/identity/users/groups-dynamic-membership |
 | Conditional Access | https://learn.microsoft.com/en-us/entra/identity/conditional-access/overview |
