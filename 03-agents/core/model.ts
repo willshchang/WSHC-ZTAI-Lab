@@ -13,6 +13,12 @@ import type { AgentPolicy, Block, ModelClient, ModelRequest, ModelTurn } from ".
 // Cheap and fast by default; override with ANTHROPIC_MODEL in .env
 const DEFAULT_MODEL = "claude-haiku-4-5-20251001";
 
+// The loop raises max_tokens once if a tool call was cut off (core/agent.ts)
+export const DEFAULT_MAX_TOKENS = 1024;
+export const API_BASE_URL = "https://api.anthropic.com";
+const REQUEST_TIMEOUT_MS = 60_000; // one request; the SDK retries on timeout
+const MAX_RETRIES = 2; // SDK retries on connection errors, 408, 409, 429 and 5xx
+
 // ------------------------------------------------------------
 // FORCED TOOL CALLS: an allowlist, not a denylist
 // ------------------------------------------------------------
@@ -46,7 +52,23 @@ export function createClaudeClient(policy: AgentPolicy): ModelClient {
     );
   }
   const model = process.env.ANTHROPIC_MODEL || DEFAULT_MODEL;
-  const client = new Anthropic({ apiKey });
+  // ----------------------------------------------------------
+  // EVERYTHING EXPLICIT: left unset, the SDK fills these from the
+  // environment (ANTHROPIC_AUTH_TOKEN as a second credential sent
+  // on every request, ANTHROPIC_BASE_URL as a different host that
+  // would receive this agent's key). Pinning them means this agent
+  // talks to Anthropic with its own key and nothing else. (The SDK
+  // also adds any headers listed in ANTHROPIC_CUSTOM_HEADERS; this
+  // lab never sets it.)
+  // Option names checked against @anthropic-ai/sdk 0.129 (client.d.ts).
+  // ----------------------------------------------------------
+  const client = new Anthropic({
+    apiKey,
+    authToken: null,
+    baseURL: API_BASE_URL,
+    timeout: REQUEST_TIMEOUT_MS,
+    maxRetries: MAX_RETRIES,
+  });
 
   const forceable = canForceTool(model);
   return {
@@ -55,13 +77,13 @@ export function createClaudeClient(policy: AgentPolicy): ModelClient {
     next: async (req: ModelRequest): Promise<ModelTurn> => {
       const response = await client.messages.create({
         model,
-        max_tokens: 1024,
+        max_tokens: req.maxTokens ?? DEFAULT_MAX_TOKENS,
         system: req.system,
         ...(req.mustUseTool && forceable ? { tool_choice: { type: "any" as const } } : {}),
         tools: req.tools.map((t) => ({
           name: t.name,
           description: t.description,
-          input_schema: t.inputSchema,
+          input_schema: t.inputSchema as Anthropic.Tool.InputSchema,
         })),
         messages: req.messages as Anthropic.MessageParam[],
       });
