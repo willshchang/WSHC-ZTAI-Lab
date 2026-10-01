@@ -175,7 +175,7 @@ terraform --version
 ### 3.1 Clone the Repository
 ```bash
 cd ~/Desktop
-git clone https://github.com/willshchang/WSHC-Entra-IaC-Zero-Trust-Lab.git
+git clone https://github.com/willshchang/WSHC-ZTAI-Lab.git
 cd WSHC-Entra-IaC-Zero-Trust-Lab
 code .
 ```

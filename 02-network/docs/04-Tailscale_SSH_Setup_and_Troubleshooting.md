@@ -55,7 +55,7 @@ from your Windows identity or Tailscale email.
 - `<linux-user>` — created during Tailscale SSH lab setup
 - `root` — Linux superuser
 
-Your Windows PC name (`iWillWindows`) is NOT a Linux user — 
+Your Windows PC name (`ADMIN-PC`) is NOT a Linux user — 
 it only exists on your Windows machine. SSH has no knowledge 
 of Windows usernames.
 
