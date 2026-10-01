@@ -176,7 +176,7 @@ terraform --version
 ```bash
 cd ~/Desktop
 git clone https://github.com/willshchang/WSHC-ZTAI-Lab.git
-cd WSHC-Entra-IaC-Zero-Trust-Lab
+cd WSHC-ZTAI-Lab/01-identity
 code .
 ```
 
