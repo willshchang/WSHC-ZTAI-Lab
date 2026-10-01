@@ -2,68 +2,62 @@
 # TAILSCALE TERRAFORM VARIABLES
 # ============================================================
 # All configuration values are defined here as variables.
-# Zero hardcoded values exist in any .tf logic file —
-# actual values live in terraform.tfvars (gitignored).
+# Actual values live in terraform.tfvars (gitignored).
 #
-# This makes the codebase fully portable — swap tfvars
-# and the same Terraform deploys to any Tailnet.
+# This makes the codebase portable: swap tfvars and the same
+# Terraform deploys to any Tailnet.
+#
+# Validation blocks catch bad values at plan time, before
+# anything reaches the live tailnet.
 #
 # Official reference:
-# https://registry.terraform.io/providers/tailscale/tailscale/latest/docs
+# https://developer.hashicorp.com/terraform/language/values/variables#custom-validation-rules
 # ============================================================
 
 # ============================================================
 # AUTHENTICATION
 # ============================================================
+# The provider talks to the tailnet that owns the OAuth client,
+# so no tailnet name variable is needed.
 
 variable "oauth_client_id" {
-  description = "Tailscale OAuth client ID — from tailscale.com/admin/settings/oauth"
+  description = "Tailscale OAuth client ID, from tailscale.com/admin/settings/oauth"
   type        = string
   sensitive   = true
 }
 
 variable "oauth_client_secret" {
-  description = "Tailscale OAuth client secret — from tailscale.com/admin/settings/oauth"
+  description = "Tailscale OAuth client secret, from tailscale.com/admin/settings/oauth"
   type        = string
   sensitive   = true
 }
 
 # ============================================================
-# TAILNET IDENTITY
+# DEVICE DNS NAMES
 # ============================================================
-
-variable "tailnet" {
-  description = "Your Tailnet name — found in tailscale.com/admin/settings/general"
-  type        = string
-  # Example: "example-tailnet.ts.net" or your organisation domain
-}
-
-# ============================================================
-# DEVICE DNSNAMES
-# ============================================================
-# Device DNSnames as they appear in the Tailscale admin
-# console. Used by data sources to look up device IDs
-# without hardcoding them.
+# The data sources in tags.tf look devices up by their FULL
+# MagicDNS name (host.<tailnet>.ts.net), not the short hostname.
+# Apple TVs report the same generic hostname, so only the full
+# name is unique.
+# https://github.com/tailscale/terraform-provider-tailscale/blob/v0.28.0/docs/data-sources/device.md
 #
-# Run `tailscale status` to confirm DNSnames.
+# Find them with: tailscale status --json (the DNSName field,
+# without the trailing dot).
 # ============================================================
 
 variable "vm_DNSname" {
-  description = "DNSname of the Azure VM subnet router and SSH server"
+  description = "Full MagicDNS name of the Azure VM (SSH server), e.g. tinyco-vm.<tailnet>.ts.net"
   type        = string
-  # Example: "tinyco-vm"
 }
 
 variable "subnet_router_primary_DNSname" {
-  description = "DNSname of the primary Apple TV subnet router"
+  description = "Full MagicDNS name of the primary Apple TV subnet router, e.g. tv-primary.<tailnet>.ts.net"
   type        = string
-  # Example: "tv-primary"
 }
 
 variable "subnet_router_ha_DNSname" {
-  description = "DNSname of the HA (failover) Apple TV subnet router"
+  description = "Full MagicDNS name of the HA (failover) Apple TV subnet router, e.g. tv-ha.<tailnet>.ts.net"
   type        = string
-  # Example: "tv-ha"
 }
 
 # ============================================================
@@ -71,9 +65,13 @@ variable "subnet_router_ha_DNSname" {
 # ============================================================
 
 variable "home_subnet_cidr" {
-  description = "Home LAN subnet CIDR advertised by Apple TV subnet routers"
+  description = "Home LAN subnet CIDR advertised by Apple TV subnet routers, e.g. 192.168.1.0/24"
   type        = string
-  # Example: "192.168.1.0/24"
+
+  validation {
+    condition     = can(cidrhost(var.home_subnet_cidr, 1))
+    error_message = "home_subnet_cidr must be a valid CIDR block such as 192.168.1.0/24."
+  }
 }
 
 # ============================================================
@@ -104,35 +102,65 @@ variable "exit_node_enabled" {
 # ============================================================
 
 variable "admin_email" {
-  description = "Tailscale account email — used in ACL grants and SSH rules"
+  description = "Tailscale login of the admin, used in ACL grants and SSH rules"
   type        = string
   # Example: "admin@example.com"
 }
 
 variable "ssh_users" {
-  description = "Linux users the admin may log in as over Tailscale SSH"
+  description = "Non-root Linux users the admin may log in as over Tailscale SSH without re-authentication"
   type        = list(string)
-  # Example: ["tinyco-admin", "your-linux-user", "root"]
+  # Example: ["tinyco-admin", "your-linux-user"]
+
+  # Root has its own "check" rule in acl.tf. Listing it here
+  # would let root in through the "accept" rule as well.
+  validation {
+    condition     = !contains(var.ssh_users, "root")
+    error_message = "Do not put \"root\" in ssh_users. Root SSH is handled by the separate check rule in acl.tf."
+  }
+}
+
+variable "ssh_root_check_period" {
+  description = "How long a browser re-authentication for root SSH stays valid (Tailscale checkPeriod), e.g. 12h"
+  type        = string
+  default     = "12h"
+
+  # Tailscale accepts 1 minute to 168 hours (one week).
+  # https://tailscale.com/docs/reference/syntax/policy-file#ssh
+  validation {
+    condition     = can(regex("^[0-9]+(m|h)$", var.ssh_root_check_period))
+    error_message = "ssh_root_check_period must be a number of minutes or hours, such as 30m or 12h (Tailscale allows 1m to 168h)."
+  }
 }
 
 # ============================================================
 # TAGS
 # ============================================================
-# Tag names must match exactly between variables.tf, acl.tf,
-# and tags.tf. Changing a tag name requires updating all
-# three files consistently.
+# Tag names are referenced through these variables in acl.tf,
+# tags.tf and keys.tf, so a rename happens here only. Every tag
+# must start with "tag:".
 # ============================================================
 
 variable "tag_server" {
   description = "Tag for cloud infrastructure devices (Azure VM)"
   type        = string
   default     = "tag:server"
+
+  validation {
+    condition     = startswith(var.tag_server, "tag:")
+    error_message = "tag_server must start with \"tag:\"."
+  }
 }
 
 variable "tag_subnet_router" {
   description = "Tag for network infrastructure devices (Apple TV subnet routers)"
   type        = string
   default     = "tag:subnet-router"
+
+  validation {
+    condition     = startswith(var.tag_subnet_router, "tag:")
+    error_message = "tag_subnet_router must start with \"tag:\"."
+  }
 }
 
 # ============================================================
@@ -140,21 +168,25 @@ variable "tag_subnet_router" {
 # ============================================================
 # tag:terraform is a manager tag assigned to the Terraform
 # OAuth client in the Tailscale admin console. It acts as
-# an intermediary owner — allowing the OAuth client to
+# an intermediary owner, allowing the OAuth client to
 # generate auth keys for infrastructure tags (tag:server,
 # tag:subnet-router) without requiring direct tag ownership.
 #
 # Tag ownership chain:
-# OAuth client → tag:terraform → tag:server
+# OAuth client -> tag:terraform -> tag:server
 #
 # Without this chain, Terraform cannot generate auth keys
-# with infrastructure tags — a known Tailscale OAuth
-# limitation documented in:
+# with infrastructure tags. Background:
 # https://github.com/tailscale/tailscale/issues/8299
 # ============================================================
 
 variable "tag_terraform" {
-  description = "Manager tag for Terraform OAuth client — owns all infrastructure tags"
+  description = "Manager tag for Terraform OAuth client, owns all infrastructure tags"
   type        = string
   default     = "tag:terraform"
+
+  validation {
+    condition     = startswith(var.tag_terraform, "tag:")
+    error_message = "tag_terraform must start with \"tag:\"."
+  }
 }

@@ -2,24 +2,27 @@
 # terraform.tfvars.example
 # ============================================================
 # Copy this file to terraform.tfvars and fill in your values.
-# terraform.tfvars is gitignored — never commit real values.
+# terraform.tfvars is gitignored, never commit real values.
 #
 # How to get OAuth credentials:
 # 1. Go to tailscale.com/admin/settings/oauth
-# 2. Create new OAuth client with scopes:
-#    acl:write, devices:read, devices:write, dns:write
+# 2. Create new OAuth client with these scopes, all Write:
+#    Devices > Core (tags: tag:server, tag:subnet-router, tag:terraform),
+#    Devices > Routes, General > Policy File, General > DNS,
+#    Keys > Auth Keys (tags: tag:server), Settings > Networking Settings
+#    (full list and API scope names: providers.tf)
 # 3. Copy client ID and secret below
 # ============================================================
 
 oauth_client_id     = "your-oauth-client-id"
 oauth_client_secret = "your-oauth-client-secret"
 
-tailnet = "your-tailnet-name.ts.net"
-
-# Device DNSnames — run `tailscale status` to confirm
-vm_DNSname                    = "your-vm-DNSname"
-subnet_router_primary_DNSname = "your-primary-appletv-DNSnamename"
-subnet_router_ha_DNSname      = "your-ha-appletv-DNSnamename"
+# Device names: the FULL MagicDNS name, not the short hostname.
+# Find them with `tailscale status --json` (DNSName field,
+# drop the trailing dot).
+vm_DNSname                    = "tinyco-vm.<tailnet>.ts.net"
+subnet_router_primary_DNSname = "tv-primary.<tailnet>.ts.net"
+subnet_router_ha_DNSname      = "tv-ha.<tailnet>.ts.net"
 
 home_subnet_cidr = "192.168.1.0/24"
 
@@ -28,8 +31,12 @@ exit_node_enabled = true
 
 admin_email = "admin@example.com"
 
-# Linux users the admin may SSH in as (Tailscale SSH)
-ssh_users = ["tinyco-admin", "your-linux-user", "root"]
+# Non-root Linux users the admin may SSH in as (Tailscale SSH).
+# Do not add "root": root has its own check rule in acl.tf.
+ssh_users = ["tinyco-admin", "your-linux-user"]
+
+# How long a browser re-authentication for root SSH stays valid
+ssh_root_check_period = "12h"
 
 # Manager tag for Terraform OAuth client
 # Must be assigned to OAuth client in admin console

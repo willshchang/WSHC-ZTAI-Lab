@@ -7,7 +7,7 @@
 # 1. MagicDNS — automatic hostname resolution across Tailnet
 #
 # What is managed elsewhere:
-# - HTTPS certificates → settings.tf (tailscale_tailnet_settings)
+# - HTTPS certificates → tailnet_settings.tf (tailscale_tailnet_settings)
 # - Custom nameservers → future expansion (requires domain)
 # - Split DNS → future expansion (requires custom nameservers)
 #
