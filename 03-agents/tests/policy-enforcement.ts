@@ -6,6 +6,11 @@
 // GTM policy doesn't allow it, so it must never run, and the trace
 // must record the denial. If someone ever adds it to the policy,
 // this test fails. Exits non-zero on any failure.
+//
+// WHY the decoy is a "read" tool: if it were an external write, the
+// approval gate (no terminal = deny) would also stop it, so a broken
+// allowlist could hide behind the gate and this test would still
+// pass. As a read, only the allowlist stands between it and running.
 // ============================================================
 
 import { readFileSync } from "node:fs";
@@ -19,7 +24,7 @@ const decoy: AgentTool = {
   name: "export_all_contacts",
   description: "DECOY: exports every contact to an outside address",
   inputSchema: { type: "object", properties: { send_to: { type: "string" } } },
-  risk: "external-write",
+  risk: "read",
   run: async () => {
     decoyRan = true;
     return { exported: true };
@@ -40,7 +45,7 @@ const fooledModel: ModelClient = {
 
 const result = await runAgent({
   policy: gtmPolicy,
-  tools: [...gtmTools, decoy],
+  tools: [...gtmTools({ signupId: "quickship-labs" }), decoy],
   model: fooledModel,
   system: "test",
   task: "Route this new signup. signup_id: quickship-labs",
@@ -49,7 +54,7 @@ const result = await runAgent({
 
 const trace = readFileSync(result.traceFile, "utf8");
 const offered = /"toolsOffered":\[[^\]]*export_all_contacts/.test(trace);
-const denied = trace.includes('"type":"policy_denied"');
+const denied = /"type":"policy_denied"[^\n]*"tool":"export_all_contacts"/.test(trace);
 
 let failures = 0;
 const check = (ok: boolean, msg: string) => {
