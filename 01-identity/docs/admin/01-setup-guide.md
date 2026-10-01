@@ -20,13 +20,21 @@ fully reproduce the environment with no prior knowledge of how it
 was originally built.
 
 **What this guide deploys:**
-- 89 employee accounts from the HR feed plus the ITOps admin (90 people) across 9 teams
+- 89 employee accounts from the HR feed (the ITOps admin who runs 
+  Terraform already exists, so 90 people) across 9 teams
 - 9 Entra security groups with dynamic membership
 - Full RBAC (Role-Based Access Control) model
-- Conditional Access (CA) policies enforcing MFA tenant-wide
+- Two Conditional Access (CA) policies: require MFA for all users, 
+  block legacy authentication
 - 14 Enterprise Application registrations (4 fully configured, 
-  10 stubbed)
-- A dedicated break-glass testing account
+  10 stubbed), all requiring an app role assignment before sign-in
+- A break-glass emergency access account with a permanent, directly 
+  assigned Global Administrator role
+
+> **Licensing:** CA policies, dynamic groups, role-assignable groups 
+> and group-based app assignment need **Entra ID P1** (the E5 trial 
+> includes it). On Entra ID Free they cannot be created or updated. 
+> See the licensing matrix in [01-identity/README.md](../../README.md#licensing-what-needs-entra-id-p1).
 
 For the full architectural rationale behind these decisions, 
 see [ARCHITECTURE.md](../ARCHITECTURE.md).
@@ -95,6 +103,14 @@ see [ARCHITECTURE.md](../ARCHITECTURE.md).
 3. Tailscale auto-enrolls in a 14-day Premium trial
 4. After the trial, subscribe to **Premium** (~$18 USD/month)
 
+> **Lab status:** this is the intended setup. The live lab tailnet 
+> was created with the admin's personal identity provider instead, 
+> so Entra Conditional Access and MFA do not gate tailnet sign-in 
+> today. Moving the tailnet to Entra ID (and syncing Entra groups 
+> with SCIM, available on the Standard, Premium and Enterprise 
+> plans per https://tailscale.com/kb/1249/sso-entra-id-scim) is a 
+> planned step.
+
 ### 1.4 Disable Security Defaults
 
 Entra enables Security Defaults on all new tenants. This **must** be 
@@ -108,9 +124,11 @@ they cannot coexist.
 4. Click **Save**
 
 > **Why:** Security Defaults and custom Conditional Access policies 
-> cannot coexist in the same tenant. Since TinyCo operates on an E5 
-> licence with full Conditional Access capabilities, Security Defaults 
-> are disabled in favour of more granular, auditable custom policies.
+> cannot coexist in the same tenant. While TinyCo had the E5 
+> licence (which includes Entra ID P1), Security Defaults were 
+> disabled in favour of more granular, auditable custom policies. 
+> On Entra ID Free, custom CA policies cannot be created or updated, 
+> so on a tenant without P1 Security Defaults is the baseline to use.
 
 ---
 
@@ -211,29 +229,41 @@ personal information that must stay private.
 
 ### 4.1 Place Raw HR Files in the Dropzone
 
-Place your HR CSV exports in the `incoming/` folder:
-- Employee roster CSV (any filename containing "employee")
-- Teams CSV (any filename containing "team")
+Place your HR CSV exports in the `incoming/` folder (gitignored). 
+Any file names work: you pass both files to the script by name.
 
 ### 4.2 Run the ETL Pipeline
 
-The ETL (Extract, Transform, Load) pipeline cleans the raw files 
-and stages them for Terraform:
+The ETL (Extract, Transform, Load) pipeline validates the raw files 
+and stages clean copies for Terraform. Run it from `01-identity/` 
+(it also works from any other folder):
 ```bash
-chmod +x scripts/00-hr-data-etl.sh
-./scripts/00-hr-data-etl.sh
+./scripts/00-hr-data-etl.sh incoming/<employee-export>.csv incoming/<team-export>.csv
 ```
 
 **What this script does:**
-- Removes the UTF-8 BOM (Byte Order Mark) Windows adds to CSV files — 
-  this invisible character causes Terraform's `csvdecode()` to fail
-- Standardises column headers to the format Terraform expects
-- Moves clean files to `data/` ready for Terraform ingestion
-- Removes the raw files from `incoming/`
+- Checks both files exist and that the headers are the expected 
+  columns (case, spaces and underscores are normalised, so 
+  `First name` is accepted as `first_name`)
+- Removes the UTF-8 BOM (Byte Order Mark) and Windows line endings. 
+  The BOM causes Terraform's `csvdecode()` to fail
+- Rejects rows with the wrong number of fields, blank values, quotes, 
+  names with anything other than letters and hyphens, duplicate 
+  `firstname.lastname` usernames, and teams that are not in the 
+  teams file
+- Optional floor: `MIN_EMPLOYEES=80 ./scripts/00-hr-data-etl.sh ...` 
+  fails if the employee file has fewer rows
+- Reports how many rows were added and removed compared with the 
+  current `data/employees.csv`. **Removed rows are account deletions 
+  on the next apply**
+- Writes both files to `data/` with owner-only permissions, and only 
+  after both files pass. On any error nothing in `data/` changes
+- Leaves the raw files in `incoming/` and reminds you to delete them 
+  (they may be your only copy of the export)
 
 ### 4.3 Required CSV Format
 
-The ETL script enforces these headers automatically. For reference:
+The ETL script rewrites the headers to these names. For reference:
 
 **`data/employees.csv`:**
 first_name,last_name,team
@@ -244,6 +274,12 @@ Emmy,Dillon,Backend
 team,applications,role_requirements
 ITOps,"Asana,Tailscale,Tableau",Administrate the entire tenant
 SRE,"Asana,Tailscale,Tableau",Administrate Azure cloud resources
+
+> **What reads which file:** Terraform reads only 
+> `data/employees.csv`. Groups are created from the `team` column of 
+> that file. `data/teams.csv` is used by the ETL script to validate 
+> team names and is kept as a reference for the app matrix; no 
+> Terraform code reads it.
 
 ### 4.4 Verify Data is Gitignored
 ```bash
@@ -263,7 +299,7 @@ incoming/
 
 Navigate to the terraform folder and create the variables file:
 ```bash
-cd ~/Desktop/WC-TinyCo-Entra-Migration/terraform
+cd terraform    # from 01-identity/
 ```
 
 Create a new file named `terraform.tfvars` with the following 
@@ -272,15 +308,27 @@ content — replace all placeholder values:
 # Core Azure credentials
 tenant_id       = "YOUR_TENANT_ID"
 subscription_id = "YOUR_SUBSCRIPTION_ID"
-admin_password  = "YOUR_CHOSEN_PASSWORD"
+
+# Initial password for NEW employee accounts only. Users must change
+# it at first sign-in, and Terraform ignores later changes to it
+# (changing it never resets existing users).
+admin_password = "YOUR_CHOSEN_INITIAL_PASSWORD"
+
+# Break-glass password: at least 16 characters, different from
+# admin_password, stored offline (password manager or sealed envelope)
+breakglass_password = "LONG_UNIQUE_BREAKGLASS_PASSWORD"
+
+# Roster guard: plan stops if data/employees.csv has fewer rows.
+# Set to roughly 90% of headcount (default 80).
+min_expected_employees = 80
 
 # Company identity
 company_name = "TinyCo"
 domain_name  = "<tenant>.onmicrosoft.com"
 
 # Admin accounts
-primary_admin_upn     = "<admin>@<tenant>.onmicrosoft.com"
-breakglass_account_prefix = "breakglass.admin"
+primary_admin_upn         = "<admin>@<tenant>.onmicrosoft.com"
+breakglass_account_prefix = "breakglass.admin"   # must be first.last
 
 # SAML app endpoints (real values stay in this gitignored file)
 app_urls = {
@@ -289,10 +337,11 @@ app_urls = {
   "elastic"    = "<deployment>.kb.<region>.azure.elastic-cloud.com"
 }
 
-# Entra ID directory roles
+# Entra ID directory roles (role template IDs). Must include "ITOps".
+# Keys must match CSV team names exactly.
 entra_role_map = {
-  "ITOps"    = "62e90394-69f5-4237-9190-012177145e10"
-  "Security" = "729827e3-9c14-49f7-bb1b-9608f156bbb8"
+  "ITOps"    = "62e90394-69f5-4237-9190-012177145e10" # Global Administrator
+  "Security" = "5d6b6bb7-de71-4623-b4af-96380a352509" # Security Reader
 }
 
 # Azure subscription roles  
@@ -310,6 +359,14 @@ azure_role_map = {
 | Subscription ID | `<subscription-id>` |
 | Tenant Domain | `<tenant>.onmicrosoft.com` |
 
+> **Role IDs:** verify every ID against Microsoft's 
+> [built-in roles reference](https://learn.microsoft.com/en-us/entra/identity/role-based-access-control/permissions-reference). 
+> An earlier version of this guide mapped `Security` to 
+> `729827e3-9c14-49f7-bb1b-9608f156bbb8`, which is **Helpdesk 
+> Administrator** (can reset passwords), not Security Reader. If 
+> your `terraform.tfvars` still has that ID, the next apply replaces 
+> the Security team's role assignment with Security Reader.
+
 > **Security note:** `terraform.tfvars` is listed in `.gitignore` 
 > and will never be pushed to GitHub. It contains sensitive 
 > credentials and must be kept local at all times.
@@ -317,6 +374,14 @@ azure_role_map = {
 ---
 
 ## Step 6 — Deploy the Environment
+
+### 6.0 Existing Tenant Only: Import a Manual Break-Glass Role
+
+`users.tf` assigns Global Administrator to the break-glass account 
+directly. If that role was already assigned by hand in the portal, 
+Entra rejects a second assignment, so import the existing one 
+before the first apply. See 
+[02-security-model.md: Importing an existing assignment](./02-security-model.md#importing-an-existing-global-administrator-assignment).
 
 ### 6.1 Initialize Terraform
 ```bash
@@ -377,6 +442,11 @@ Microsoft identity. No additional SSO configuration required.
 **Verify:** Go to **tailscale.com/admin** → **Settings** → 
 **User Management** → confirm Identity Provider shows **Microsoft**.
 
+> **Lab status:** the live lab tailnet does not use Microsoft as its 
+> identity provider yet (see the note in 1.3). `tailscale.tf` only 
+> looks up the Tailscale service principal; Terraform does not set 
+> "assignment required" on it.
+
 ### 7.2 Mattermost
 
 Mattermost runs on the Azure VM and is accessible only via 
@@ -419,7 +489,10 @@ for HTTPS termination.
 | Groups | Entra → Groups | 11+ groups (9 TinyCo dynamic + admin static groups) |
 | Enterprise Apps | Entra → Enterprise Applications | 14 TinyCo apps visible |
 | Conditional Access | Entra → Security → Conditional Access | 2 policies active |
-| RBAC — ITOps | Entra → Roles | TinyCo-ITOps-Admins: Global Administrator |
+| RBAC: ITOps | Entra → Roles | TinyCo-ITOps-Admins (Static): Global Administrator |
+| RBAC: Security | Entra → Roles | TinyCo-Security-Admins (Static): Security Reader |
+| Break-glass | Entra → Roles → Global Administrator | Break-glass user listed as a direct, active assignment |
+| App assignment | Enterprise Applications → app → Properties | Assignment required? = Yes |
 | RBAC — SRE | Azure → Subscriptions → IAM | TinyCo-SRE: Contributor |
 | Tailscale | tailscale.com/admin | tinyco-vm Connected, Exit Node active |
 | Mattermost | Tailscale URL | Login page with Entra ID button |
@@ -435,10 +508,11 @@ for HTTPS termination.
 | `providers.tf` | Azure and Entra provider versions |
 | `variables.tf` | Variable definitions (no values) |
 | `terraform.tfvars` | Actual values — gitignored, never on GitHub |
-| `users.tf` | 89 employee accounts, CSV-driven with full attribute mapping |
-| `groups.tf` | Dynamic team groups (ABAC) + static admin groups |
+| `users.tf` | 89 employee accounts, CSV-driven with full attribute mapping; roster guard; break-glass account and its Global Administrator assignment |
+| `groups.tf` | Dynamic team groups (ABAC) + static admin groups + break-glass exclusion group |
 | `rbac.tf` | Azure and Entra role assignments + app access matrix |
-| `conditional-access.tf` | MFA policy + legacy auth block + break-glass account |
+| `conditional-access.tf` | MFA policy + legacy auth block (both exclude the break-glass group) |
+| `jml.tf` | Static groups and IDs for the JML agent (Layer 3) |
 | `tailscale.tf` | Tailscale service principal reference |
 | `mattermost.tf` | Mattermost custom SAML app registration |
 | `tableau.tf` | Tableau Cloud SAML app registration |

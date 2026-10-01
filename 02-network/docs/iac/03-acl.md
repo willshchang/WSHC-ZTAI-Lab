@@ -44,9 +44,9 @@ Defines who can assign each tag to devices:
 
 ```hcl
 tagOwners = {
-  "tag:terraform"         = [var.admin_email]
-  (var.tag_server)        = ["tag:terraform"]
-  (var.tag_subnet_router) = ["tag:terraform"]
+  (var.tag_terraform)     = [var.admin_email]
+  (var.tag_server)        = [var.tag_terraform]
+  (var.tag_subnet_router) = [var.tag_terraform]
 }
 ```
 
@@ -77,9 +77,18 @@ No deny rules needed.
 | `admin_email` | `tag:server` | Full |
 | `admin_email` | `tag:subnet-router` | Full |
 | `admin_email` | `192.168.1.0/24` | Full |
-| `tag:server` | `192.168.1.0/24` | Full |
+| `admin_email` | `autogroup:internet` (exit nodes) | Full |
+| `tag:server` | `192.168.1.0/24` | ❌ Blocked (implicit deny, deny-tested) |
+| `tag:server` | `tag:subnet-router` | ❌ Blocked (implicit deny, deny-tested) |
 | `tag:server` | user devices | ❌ Blocked (implicit deny) |
-| `tag:subnet-router` | anywhere | ❌ Blocked (implicit deny) |
+| `tag:subnet-router` | anywhere, including `tag:server` | ❌ Blocked (implicit deny, `tag:server` deny-tested) |
+
+> **Removed grant:** earlier versions allowed `tag:server` → 
+> `192.168.1.0/24` on all ports "for monitoring or backup", with no 
+> real use case. The Azure VM is internet-facing, so that grant let 
+> a compromised VM reach every port on every home LAN device. If a 
+> real need appears, add a narrow grant (one host, one port) and 
+> update the deny tests.
 
 **Production expansion — multi-user groups:**
 ```json
@@ -107,10 +116,29 @@ ssh = [
     action = "accept"
     src    = [var.admin_email]
     dst    = [var.tag_server]
-    users  = ["tinyco-admin", "<linux-user>", "root"]
+    users  = var.ssh_users      # e.g. ["tinyco-admin", "<linux-user>"], never root
+  },
+  {
+    action      = "check"
+    src         = [var.admin_email]
+    dst         = [var.tag_server]
+    users       = ["root"]
+    checkPeriod = var.ssh_root_check_period   # default "12h"
   }
 ]
 ```
+
+**Why two rules:** `accept` lets the admin in as an everyday user 
+with no extra prompt. Root goes through `check`: Tailscale asks the 
+admin to sign in again in the browser when the last check is older 
+than `checkPeriod` (1m to 168h, default 12h). Tailscale evaluates 
+`check` rules before `accept` rules 
+([policy file syntax](https://tailscale.com/docs/reference/syntax/policy-file)). 
+`ssh_users` is validated to never contain `root`, so root cannot 
+slip in through the `accept` rule.
+
+**Live effect:** root SSH that used to connect straight away now 
+opens a browser re-authentication at most once per `checkPeriod`.
 
 **IaC boundary:** The ACL SSH rule controls WHO can SSH. 
 Enabling Tailscale SSH on the device (`sudo tailscale set --ssh`) 
@@ -127,15 +155,39 @@ when IdP provisions Linux users via SCIM.
 
 ### Tests
 
-Validates policy on every `terraform apply` — save rejected if 
-any test fails:
+Validates policy on every `terraform apply`: the save is rejected 
+if any test fails. Accept tests prove the admin keeps access; deny 
+tests prove the implicit denies stay in place.
 
 ```hcl
+locals {
+  home_test_ip = cidrhost(var.home_subnet_cidr, 1)   # 192.168.1.1 in this lab
+}
+
 tests = [
   {
     src    = var.admin_email
-    accept = ["tag:server:22", "tag:subnet-router:80", "192.168.1.1:80"]
+    accept = ["${var.tag_server}:22", "${var.tag_subnet_router}:80", "${local.home_test_ip}:80"]
     deny   = []
+  },
+  {
+    src    = var.tag_server
+    accept = []
+    deny   = ["${local.home_test_ip}:80", "${local.home_test_ip}:22", "${var.tag_subnet_router}:22"]
+  },
+  {
+    src    = var.tag_subnet_router
+    accept = []
+    deny   = ["${var.tag_server}:22"]
+  }
+]
+
+sshTests = [
+  {
+    src    = var.admin_email
+    dst    = [var.tag_server]
+    accept = var.ssh_users
+    check  = ["root"]
   }
 ]
 ```
@@ -143,6 +195,11 @@ tests = [
 > **Note:** Test accept values require `hostname:port` format — 
 > not just hostname. Missing port = apply rejected with 
 > `missing port in address` error.
+
+> **Exit nodes are not tested.** The policy file reference documents 
+> tests as `host:port` destinations and does not document 
+> `autogroup:internet` as a test target, so there is no test for 
+> the exit node grant.
 
 ---
 
@@ -153,5 +210,6 @@ tests = [
 | ACL policy syntax | https://tailscale.com/docs/reference/syntax/policy-file |
 | Tags | https://tailscale.com/kb/1068/acl-tags |
 | SSH rules | https://tailscale.com/kb/1193/tailscale-ssh |
+| SSH `check`, `checkPeriod`, `sshTests` | https://tailscale.com/docs/reference/syntax/policy-file |
 | Default deny | https://tailscale.com/blog/access-control-best-practices |
 | OAuth tag ownership issue | https://github.com/tailscale/tailscale/issues/8299 |

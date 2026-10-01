@@ -84,6 +84,11 @@ Download for your device:
 
 ### Connect to TinyCo Network
 
+> **Lab status:** this describes the target setup. The lab tailnet 
+> does not use Entra ID (Microsoft) as its identity provider yet; 
+> only the admin signs in to it today, with a personal identity 
+> provider. Moving the tailnet to Entra ID is a planned step.
+
 1. Open Tailscale after installing
 2. Click **Log in**
 3. Select **Sign in with Microsoft**

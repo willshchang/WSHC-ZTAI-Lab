@@ -30,7 +30,7 @@ often confused:
 
 | Layer | What it does | Tool |
 |---|---|---|
-| **Authentication** | Verifies WHO you are — no SSH keys needed | Tailscale identity (Gmail / Entra SSO) |
+| **Authentication** | Verifies WHO you are, no SSH keys needed | Tailscale identity (the admin's personal identity provider today; Entra SSO planned) |
 | **Authorization** | Determines WHICH Linux user you log in as | Linux user account on destination VM |
 
 **Common misconception:**
@@ -83,14 +83,25 @@ Your Tailscale ACL defines which Linux users are permitted:
         "action": "accept",
         "src":    ["admin@example.com"],
         "dst":    ["tag:server"],
-        "users":  ["tinyco-admin", "<linux-user>", "root"]
+        "users":  ["tinyco-admin", "<linux-user>"]
+    },
+    {
+        "action":      "check",
+        "src":         ["admin@example.com"],
+        "dst":         ["tag:server"],
+        "users":       ["root"],
+        "checkPeriod": "12h"
     }
 ]
 ```
 
 **What this means:**
 - `admin@example.com` can SSH to `tag:server` devices
-- But ONLY as Linux users: `tinyco-admin`, `<linux-user>`, or `root`
+- As `tinyco-admin` or `<linux-user>` (from `ssh_users` in 
+  `terraform.tfvars`) with no extra prompt
+- As `root` only after a browser re-authentication, which stays 
+  valid for `ssh_root_check_period` (default 12h). `ssh_users` is 
+  validated to never contain `root`
 - Any other Linux username = rejected even if Tailscale 
   identity is valid
 

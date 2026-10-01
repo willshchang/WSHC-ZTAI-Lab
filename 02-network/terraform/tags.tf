@@ -25,29 +25,33 @@
 # ============================================================
 # DATA SOURCES — Dynamic device lookup
 # ============================================================
-# Looks up device IDs by hostname rather than hardcoding them.
-# Device IDs change if a device is re-enrolled — data sources
-# always fetch the current ID at plan time.
+# Looks up device IDs by full MagicDNS name rather than
+# hardcoding them. Device IDs change if a device is re-enrolled,
+# and data sources always fetch the current ID at plan time.
 #
-# Run `tailscale status` to confirm hostnames match exactly.
-# Hostnames are case-sensitive.
+# The `name` argument takes the FULL name, e.g.
+# tinyco-vm.<tailnet>.ts.net, not the short hostname:
+# https://github.com/tailscale/terraform-provider-tailscale/blob/v0.28.0/docs/data-sources/device.md
+#
+# Find it with `tailscale status --json` (DNSName field, drop
+# the trailing dot).
 # ============================================================
 
 data "tailscale_device" "vm" {
-  # Azure VM — cloud infrastructure
-  # Hostname as shown in tailscale status output
+  # Azure VM, cloud infrastructure
+  # Full MagicDNS name, e.g. tinyco-vm.<tailnet>.ts.net
   name = var.vm_DNSname
 }
 
 data "tailscale_device" "subnet_router_primary" {
-  # Primary Apple TV — primary subnet router
-  # Hostname as shown in tailscale status output
+  # Primary Apple TV, primary subnet router
+  # Full MagicDNS name, e.g. tv-primary.<tailnet>.ts.net
   name = var.subnet_router_primary_DNSname
 }
 
 data "tailscale_device" "subnet_router_ha" {
-  # HA Apple TV — HA failover subnet router
-  # Hostname as shown in tailscale status output
+  # HA Apple TV, HA failover subnet router
+  # Full MagicDNS name, e.g. tv-ha.<tailnet>.ts.net
   name = var.subnet_router_ha_DNSname
 }
 

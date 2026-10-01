@@ -65,7 +65,10 @@ two distinct security layers:
 
 - **Tailscale** gates access to internal infrastructure (Azure VM, 
   Mattermost). Nothing on the private network is reachable without 
-  an active Tailscale connection authenticated via Entra ID.
+  an active Tailscale connection. Today the tailnet admin signs in 
+  to Tailscale with a personal identity provider, so Entra CA and 
+  MFA do not gate the tailnet; moving the tailnet to Entra ID as its 
+  identity provider is a planned step.
 
 - **Entra ID SSO** gates access to cloud SaaS applications (Tableau, 
   Elastic). Authentication is enforced via SAML (Security Assertion 
@@ -78,8 +81,8 @@ A new TinyCo employee's identity flows through the following stages
 automatically:
 HR CSV file (incoming/ dropzone)
 ↓
-ETL pipeline (scripts/00-hr-data-etl.sh)
-↓ cleans BOM, standardises headers
+ETL pipeline (scripts/00-hr-data-etl.sh <employees.csv> <teams.csv>)
+↓ validates both files, strips BOM, standardises headers
 Clean CSV (data/)
 ↓
 Terraform apply
@@ -113,12 +116,17 @@ is ported to a new client.
 
 - `terraform.tfvars` — company identity, tenant IDs, role mappings. 
   Gitignored. Never on GitHub.
-- `data/employees.csv` — employee roster. Gitignored. Never on GitHub.
-- `data/teams.csv` — team configuration. Gitignored. Never on GitHub.
+- `data/employees.csv`: employee roster; team groups come from its 
+  `team` column. Gitignored. Never on GitHub.
+- `data/teams.csv`: team list used by the ETL script to validate 
+  team names. No Terraform code reads it. Gitignored. Never on GitHub.
 
-**Result:** Every `.tf` logic file contains zero company-specific 
-strings. The entire codebase is a reusable module — swap the CSV 
-files and tfvars, and it deploys for any organisation.
+**Result:** The `.tf` logic files contain no employee or company 
+data. The one team name in code is the admin team 
+(`local.admin_team = "ITOps"` in `groups.tf`), which 
+`entra_role_map` is validated against. Swap the CSV files and 
+tfvars, and it deploys for any organisation that names its admin 
+team ITOps.
 
 ---
 
@@ -139,6 +147,9 @@ engine using Dynamic Membership rules.
   `(user.department -eq "TeamName")`
 - Entra evaluates this rule continuously — users are added or removed 
   automatically within 5–15 minutes of an attribute change
+- Requires Entra ID P1 for every member; the tenant is on Free since 
+  the E5 trial ended (see the licensing matrix in 
+  [01-identity/README.md](../README.md#licensing-what-needs-entra-id-p1))
 
 **Self-healing behaviour:**
 > Paula transfers from Backend to Frontend. HR updates the CSV. 
@@ -228,21 +239,41 @@ without touching any security policy code.
 
 **Challenge:** HR CSV exports from Windows contain a UTF-8 BOM 
 (Byte Order Mark) — three invisible bytes that cause Terraform's 
-`csvdecode()` to fail. Wildcard file searches for HR data are 
-dangerous — a script that searches `*employee*` could accidentally 
-pick up a terminated employee list and trigger mass deprovisioning.
+`csvdecode()` to fail. And because removing a row **deletes** the 
+Entra account, a wrong or truncated file is dangerous: a script 
+that searches `*employee*` could pick up a terminated employee list, 
+and a half-copied export could plan the deletion of most of the 
+company.
 
-**Decision:** Implement a staged dropzone architecture.
-incoming/     ← IT admin drops raw HR export here
+**Decision:** Explicit, validated staging plus a Terraform guard.
+```
+incoming/     ← IT admin drops raw HR exports here
 ↓
-scripts/00-hr-data-etl.sh
-↓ strips BOM, standardises headers, validates files
-data/         ← clean files ready for Terraform
+scripts/00-hr-data-etl.sh <employees.csv> <teams.csv>
+↓ validates both files, strips BOM and CRLF, standardises headers
+data/         ← clean files ready for Terraform (owner-only)
+↓
+terraform plan
+↓ stops if the roster has fewer rows than min_expected_employees
+```
 
-**Security rationale:** The ETL script only processes files explicitly 
-placed in `incoming/` by the IT admin. No wildcard searches. No 
-accidental file ingestion. One wrong file cannot trigger mass 
-deprovisioning.
+**What the script guarantees:**
+- It processes only the two files named on the command line. There 
+  is no wildcard search
+- Headers, field counts, blank values, name characters, duplicate 
+  usernames and team values (checked against the teams file) are 
+  validated; any failure exits non-zero and leaves `data/` unchanged
+- Both files are written to temp files and moved into place only 
+  after both pass
+- It reports how many rows were added and removed compared with the 
+  current roster, so deletions are visible before `terraform plan`
+- It never deletes the source exports
+
+**What it does not guarantee:** a valid file that is simply the 
+wrong roster still passes. The row-count floor in the script 
+(`MIN_EMPLOYEES`) and in Terraform (`min_expected_employees`) 
+catches truncation, and `terraform plan` remains the final check: 
+read every delete before applying.
 
 ---
 
@@ -313,7 +344,7 @@ Tableau, Elastic) were registered as custom OIDC apps via Terraform's
 
 | App | Type | Protocol | Gallery Available | SCIM |
 |---|---|---|---|---|
-| **Tailscale** | Multi-tenant SaaS | OIDC | ✅ Auto-registers on admin login | ❌ Enterprise plan required |
+| **Tailscale** | Multi-tenant SaaS | OIDC | ✅ Auto-registers on admin login | ❌ Not set up: available on Standard, Premium and Enterprise, but needs the tailnet on Entra ID first |
 | **Mattermost** | Self-hosted | SAML | ❌ Custom registration required | ❌ Vendor not supported |
 | **Tableau** | SaaS | SAML | ✅ Gallery app available | ✅ Requires SAML first |
 | **Elastic** | Multi-tenant SaaS | OIDC/SAML | ✅ Gallery app available | ❌ Custom domain required |
@@ -328,17 +359,17 @@ Tableau, Elastic) were registered as custom OIDC apps via Terraform's
 
 ### How to Check the Gallery (Scripted)
 ```bash
-# scripts/01-gallery-lookup.sh
 # Usage: ./scripts/01-gallery-lookup.sh "Mattermost"
-
-APP_NAME="$1"
-echo "Searching Microsoft Gallery for: $APP_NAME"
-
-az rest --method GET \
-  --url "https://graph.microsoft.com/v1.0/applicationTemplates" \
-  --query "value[?contains(displayName, '$APP_NAME')].{Name:displayName, ID:id}" \
-  --output table
 ```
+
+The script calls Microsoft Graph 
+[List applicationTemplates](https://learn.microsoft.com/en-us/graph/api/applicationtemplate-list) 
+with a server-side `$filter=contains(displayName,'<name>')` 
+(`displayName` supports `contains` per the 
+[applicationTemplate resource](https://learn.microsoft.com/en-us/graph/api/resources/applicationtemplate)). 
+Single quotes in the name are escaped for OData, and the name is 
+never placed inside the `--query` JMESPath expression, so it cannot 
+change what the query does.
 
 ### Gallery App Registration in Terraform
 
@@ -381,6 +412,9 @@ resource "azuread_application" "mattermost" {
 resource "azuread_service_principal" "mattermost" {
   client_id                     = azuread_application.mattermost.client_id
   preferred_single_sign_on_mode = "saml"
+
+  # Only assigned users and groups can get a token
+  app_role_assignment_required = true
 
   feature_tags {
     enterprise            = true
@@ -425,7 +459,7 @@ terraform-prod/
 | **Frontend** | User | User | Viewer | Viewer |
 | **Design** | User | User | Explorer | Viewer |
 | **Product** | User | User | Creator | Viewer |
-| **PeopleOps** | User | User | Viewer | — |
+| **People Ops** | User | User | Viewer | — |
 | **Legal** | User | User | Viewer | — |
 
 ### Tableau Role Design (Production)
@@ -442,7 +476,7 @@ This confirmed in practice why least-privilege role assignment matters
 # Entra groups mapped to Tableau roles
 TinyCo-Tableau-Creator   → ITOps, Product, SRE
 TinyCo-Tableau-Explorer  → Design, Frontend
-TinyCo-Tableau-Viewer    → Security, Backend, Legal, PeopleOps
+TinyCo-Tableau-Viewer    → Security, Backend, Legal, People Ops
 ```
 
 **SCIM role mapping per group:**
@@ -509,18 +543,24 @@ production deployment.
 - **Professional email domain** — `@tinyco.com` instead of 
   `@<tenant>.onmicrosoft.com` for all user accounts.
 
-### 2. Tailscale Enterprise Plan
+### 2. Tailscale on Entra ID with SCIM
 
 **Impact:** Enables SCIM (System for Cross-domain Identity Management) 
-provisioning for Tailscale. Users added to Entra groups would be 
-automatically provisioned in Tailscale without manual approval.
+provisioning for Tailscale. Users and groups in Entra would be 
+synced to Tailscale, Entra groups could be used directly in the 
+Tailscale ACL, and disabling or deleting a user in Entra would 
+suspend them in Tailscale. Without SCIM, offboarding in Tailscale 
+is a manual admin console step.
 
-Currently on Premium plan — SCIM is an Enterprise-only feature.
+Plan is not the blocker: Tailscale documents Entra ID SCIM as 
+available on the Standard, Premium and Enterprise plans, and the lab 
+is on Premium. The blocker is that the lab tailnet signs in with a 
+personal identity provider, not Entra ID. Switching the tailnet's 
+identity provider to Entra ID comes first.
 
-*Reference: Tailscale SCIM requires Enterprise plan:*
-*https://tailscale.com/kb/1249/sso-entra-id-scim*
+*Reference:* *https://tailscale.com/kb/1249/sso-entra-id-scim*
 
-> *"This feature is available for the Enterprise plan."*
+> *"This feature is available for the Standard, Premium, and Enterprise plans."*
 
 ### 3. Mattermost SCIM
 
@@ -533,8 +573,8 @@ via SAML SSO is the only supported automated provisioning method.
 
 **Production workaround:** Use Mattermost's LDAP sync feature with 
 Entra ID via Azure AD Connect for attribute synchronisation. This 
-requires Microsoft Entra ID P1 or higher — already included in the 
-E5 trial used in this project.
+requires Microsoft Entra ID P1 or higher. The E5 trial used to build 
+this project included it; the tenant is on Entra ID Free now.
 
 ### 4. Privileged Identity Management (PIM)
 
@@ -548,7 +588,12 @@ Reduces the blast radius of a compromised ITOps account from
 "permanent tenant-wide admin" to "temporary approved access with 
 logged justification."
 
-Requires: Microsoft Entra ID P2 — included in E5 trial.
+The break-glass account stays outside PIM with a permanent active 
+Global Administrator assignment, as Microsoft advises, so it still 
+works if PIM or its approvers are unavailable.
+
+Requires: Microsoft Entra ID P2 (included in E5; the tenant is on 
+Free now).
 
 ### 5. Terraform Remote State
 
@@ -611,7 +656,10 @@ role matrix.
 
 | Limitation | Official Reference |
 |---|---|
-| Tailscale SCIM — Enterprise plan required | https://tailscale.com/kb/1249/sso-entra-id-scim |
+| Tailscale Entra ID SCIM: Standard, Premium and Enterprise plans; tailnet must use Entra ID as identity provider | https://tailscale.com/kb/1249/sso-entra-id-scim |
+| Conditional Access: Entra ID P1; frozen (view/delete only) when the license expires | https://learn.microsoft.com/en-us/entra/identity/conditional-access/overview#license-requirements |
+| Group-based app assignment: Entra ID P1 or P2 | https://learn.microsoft.com/en-us/entra/identity/enterprise-apps/assign-user-or-group-access-portal |
+| Dynamic membership groups: Entra ID P1 per member | https://learn.microsoft.com/en-us/entra/identity/users/groups-dynamic-membership#license-requirements |
 | Mattermost SCIM — not supported | https://docs.mattermost.com/administration-guide/onboard/sso-entraid.html |
 | Elastic org-level SSO — custom domain required | https://www.elastic.co/docs/deploy-manage/users-roles/cloud-organization/configure-saml-authentication |
 | Tableau SCIM — SAML prerequisite | https://help.tableau.com/current/online/en-us/scim_config_azure_ad.htm |

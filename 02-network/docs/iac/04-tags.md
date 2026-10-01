@@ -32,6 +32,17 @@ Apple TV and some devices return generic hostnames (e.g. `apple-tv`)
 via the Tailscale API — both Apple TVs return the same hostname, 
 making them indistinguishable. The full DNS name is always unique.
 
+The `name` argument takes the **full** name, `host.<tailnet>.ts.net` 
+([provider docs, 0.28.0](https://github.com/tailscale/terraform-provider-tailscale/blob/v0.28.0/docs/data-sources/device.md)), 
+so the variables hold values like `tinyco-vm.<tailnet>.ts.net`, 
+without the trailing dot that `tailscale status --json` prints.
+
+> **Follow-up (not changed):** the resources use the data source's 
+> `id`. The provider now calls `node_id` the preferred identifier, 
+> but switching `device_id` to `node_id` may plan a replacement of 
+> live tag and route resources, so it is left for a separate, 
+> planned change.
+
 **Finding DNS names:**
 ```bash
 tailscale status --json | python3 -c "

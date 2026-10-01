@@ -26,9 +26,17 @@ didn't work, why they failed, and what the correct approach was.
 - **Home network:** ISP modem (`192.168.1.1`) → 
   Wi-Fi router in AP mode (`192.168.1.2`)
 
-**Goal:** Azure VM (Site A) reaches non-Tailscale devices on 
-the home LAN (`192.168.1.0/24`) through the Apple TV subnet 
-router (Site B) with automatic HA failover.
+**Original goal (historical):** Azure VM (Site A) reaches 
+non-Tailscale devices on the home LAN (`192.168.1.0/24`) through 
+the Apple TV subnet router (Site B) with automatic HA failover. 
+This was built and verified, and the VM results below are kept as a 
+record.
+
+**Current state:** the ACL grant from `tag:server` to the home 
+subnet has been removed. The VM is internet-facing and had no real 
+need to reach the home LAN, so the ACL deny tests now prove it 
+cannot. The admin's own devices still reach the home LAN through 
+the same HA subnet routers; run connectivity tests from those.
 
 ---
 
@@ -596,7 +604,10 @@ subnet for redundancy.
 - If primary goes offline → automatic failover to secondary
 - Clients require zero configuration changes
 
-**Lab HA test — verified results:**
+**Lab HA test, verified results (historical):** run from the 
+Azure VM while the ACL still granted `tag:server` access to the home 
+subnet. That grant has since been removed, so the VM can no longer 
+reach `192.168.1.0/24`; run the test from an admin device instead.
 
 | Test | Result |
 |---|---|
@@ -610,7 +621,8 @@ subnet for redundancy.
 1. Admin console → `tv-primary` → Edit route settings → 
    uncheck `192.168.1.0/24` → Save
 2. Wait 5 seconds
-3. From Azure VM: `ping -c 4 192.168.1.1`
+3. From an admin device (not the Azure VM): `ping -c 4 192.168.1.1` 
+   (Windows: `ping -n 4 192.168.1.1`)
 4. Restore: re-check `192.168.1.0/24` on `tv-primary`
 
 **Production framing:**

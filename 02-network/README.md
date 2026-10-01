@@ -9,9 +9,10 @@
 
 ## Overview
 
-The network layer of the WSHC ZTAI Lab. Once a user has proven who
-they are through Layer 1 (Entra ID), this layer decides which machines
-they can actually reach, over which ports, and how.
+The network layer of the WSHC ZTAI Lab. Once a user has signed in to
+the tailnet, this layer decides which machines they can actually
+reach, over which ports, and how. (The tailnet does not use Layer 1's
+Entra ID for sign-in yet; see the identity note under Architecture.)
 
 This layer controls **Reachability**: what can reach what.
 
@@ -44,7 +45,7 @@ running and managed by the code in this folder.
 ```mermaid
 %%{init: {"flowchart": {"htmlLabels": false}}}%%
 flowchart TB
-    eng["Engineer devices<br/>signed in via Entra ID"]
+    eng["Engineer devices<br/>admin's Tailscale login"]
 
     subgraph A["Site A · Azure cloud"]
         vm["tinyco-vm (Ubuntu)<br/>tag:server<br/>Tailscale SSH only"]
@@ -59,15 +60,22 @@ flowchart TB
 
     eng -->|"SSH as your identity"| vm
     eng -->|"home subnet"| r1
-    vm -->|"home subnet"| r1
     eng -.->|"exit node, when on"| r1
     r1 --> lan
     r2 -.->|"takes over on failure"| lan
 ```
 
 Each labelled solid arrow is a grant in `acl.tf`; anything not granted is blocked.
+The Azure VM has no grant to the home LAN: it is internet-facing, so ACL deny
+tests prove it cannot reach the home subnet or the subnet routers.
 Terraform manages the ACL, device tags, route approvals and auth keys for both
 sites.
+
+> **Identity today:** the only person on the tailnet is the admin, who signs in
+> to Tailscale with a personal identity provider. Entra ID is not the tailnet's
+> identity provider yet, so Entra Conditional Access and MFA do not gate tailnet
+> sign-in. Moving the tailnet to Entra ID, and using SCIM-synced Entra groups in
+> the ACL, is a planned step.
 
 | Site | Devices | Role |
 |---|---|---|
@@ -147,7 +155,7 @@ Full prerequisites and the manual steps are in
 ```bash
 cd 02-network/terraform
 cp terraform.tfvars.example terraform.tfvars
-# fill in the OAuth client, tailnet name and device DNS names
+# fill in the OAuth client and the full device DNS names (host.<tailnet>.ts.net)
 
 terraform init
 terraform plan        # review before changing anything
@@ -172,9 +180,10 @@ terraform apply
 ## Security Notes
 
 - OAuth credentials live only in `terraform.tfvars`, which is gitignored
-- Auth keys are single-use, pre-authorized for one tag and expire after one hour
+- Auth keys are single-use, tagged, expire after one hour, and are passed to `tailscale up` from a root-only file, never on the command line
 - Port 22 is closed at the Azure network security group; SSH is Tailscale SSH only
-- ACL tests run on every apply and reject any policy that would lock the admin out
+- Root SSH uses a `check` rule: the admin must re-authenticate in the browser if the last check is older than `ssh_root_check_period` (default 12h). Other Linux users use `accept`
+- ACL tests run on every apply: accept tests reject any policy that would lock the admin out, deny tests reject any policy that opens the VM to the home LAN or connects the VM and the subnet routers
 
 ---
 

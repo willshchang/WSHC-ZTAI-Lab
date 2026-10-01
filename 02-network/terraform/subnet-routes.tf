@@ -114,10 +114,12 @@ resource "tailscale_device_subnet_routes" "primary" {
 # Higher latency than primary (ethernet) so Tailscale
 # keeps it in standby until primary is unavailable.
 #
-# Failover verified:
+# Failover verified (historical, before the tag:server to home
+# subnet grant was removed from acl.tf):
 # Disabled primary route in admin console → pinged
 # 192.168.1.1 from Azure VM → 4/4 packets received
 # via HA router within ~5 seconds. Zero client changes.
+# Repeat the test today from an admin device instead.
 #
 # Production note:
 # In production, each subnet router would advertise a
@@ -154,7 +156,8 @@ resource "tailscale_device_subnet_routes" "ha" {
 #         print('  Advertised:', advertised)
 # "
 #
-# Test site-to-site connectivity from Azure VM:
+# Test site-to-site connectivity from an admin device (the
+# Azure VM no longer has an ACL grant to the home subnet):
 # ping -c 4 192.168.1.1   # ISP modem
-# ping -c 4 192.168.1.2    # Wi-Fi AP
+# ping -c 4 192.168.1.2   # Wi-Fi AP
 # ============================================================

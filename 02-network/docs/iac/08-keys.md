@@ -34,22 +34,20 @@ related. They are completely separate:
 
 **Without auth key — manual enrollment:**
 ```bash
-ssh admin@vm
+# On the VM console
 sudo tailscale up
 # Opens browser URL → human must authenticate manually
 # Cannot be scripted or automated at scale
 ```
 
-**With auth key — fully automated:**
+**With auth key (no browser login):**
 ```bash
-curl -fsSL https://tailscale.com/install.sh | sh
-sudo tailscale up \
-  --authkey=$(terraform output -raw vm_auth_key) \
-  --ssh \
-  --accept-routes \
-  --advertise-exit-node
-# No browser, no human, VM joins Tailnet in seconds
+# On the VM (root-only file, key never on a command line)
+sudo tailscale up --auth-key=file:/root/ts-authkey --ssh
+# VM joins the tailnet as tag:server in seconds
 ```
+
+See [Enrolling the VM](#enrolling-the-vm) for the full steps.
 
 ---
 
@@ -59,9 +57,9 @@ sudo tailscale up \
 resource "tailscale_tailnet_key" "vm_auth_key" {
   reusable      = false   # single-use — limits blast radius
   ephemeral     = false   # VM persists after going offline
-  preauthorized = true    # skips manual approval in admin console
+  preauthorized = true    # pre-approves the device IF device approval is on
   expiry        = 3600    # expires in 1 hour — use immediately
-  description   = "Tailscale auth key for tinyco-vm"
+  description   = "Terraform auth key for tinyco-vm"
   tags          = [var.tag_server]
   depends_on    = [tailscale_acl.policy]
 }
@@ -70,9 +68,25 @@ resource "tailscale_tailnet_key" "vm_auth_key" {
 **`reusable = false`** — single-use key. If leaked, attacker can 
 only enroll one device before the key is consumed.
 
+**`preauthorized = true`**: only has an effect when device 
+approval is turned on (`devices_approval_on` in 
+`tailnet_settings.tf`, currently off). Then a device that enrolls 
+with this key skips the manual approval step. With device approval 
+off, every device is approved anyway.
+
 **`expiry = 3600`** — 1 hour expiry. Use immediately after 
-`terraform apply`. Expired keys cannot be used — generate a new 
-one by running `terraform apply` again.
+`terraform apply`.
+
+**After first use or expiry:** a single-use key becomes invalid 
+once a device enrolls with it, or after the hour passes. Terraform 
+keeps the invalid key in state and a plain `terraform apply` does 
+**not** create a new one (provider docs for `recreate_if_invalid`: 
+"By default, reusable keys will be recreated, but single-use keys 
+will not."). To mint a fresh key:
+
+```bash
+terraform apply -replace=tailscale_tailnet_key.vm_auth_key
+```
 
 ---
 
@@ -114,26 +128,49 @@ ownership chain.
 
 ---
 
-## Retrieving the Key
+## Enrolling the VM
+
+**1. Read the key on the admin machine** (where Terraform runs, in 
+`02-network/terraform`; Terraform state is not on the VM):
 
 ```bash
-# After terraform apply
 terraform output -raw vm_auth_key
 ```
 
 Key value starts with `tskey-auth-...`
 
-**Security — secret sprawl prevention:**
-The output is marked `sensitive = true` — never printed in plain 
-text during `terraform plan` or `terraform apply`. Always retrieve 
-via `terraform output -raw` and pipe directly — never store in 
-plain text files or shell history.
+**2. Open a console on the VM that does not use port 22**, for 
+example Azure Serial Console. Port 22 is closed at the NSG, so 
+plain `ssh` to the VM is not an option, and Tailscale SSH only works 
+after the VM has joined.
 
-**Production pattern:**
+**3. On the VM, pass the key from a root-only file:**
+
 ```bash
-# Pipe directly without storing
-sudo tailscale up --authkey=$(terraform output -raw vm_auth_key) --ssh
+sudo install -m 600 /dev/null /root/ts-authkey
+sudo nano /root/ts-authkey          # paste the key, save
+curl -fsSL https://tailscale.com/install.sh | sh
+sudo tailscale up --auth-key=file:/root/ts-authkey --ssh
+sudo shred -u /root/ts-authkey
 ```
+
+The `file:` prefix is documented for `--auth-key`: "if it begins 
+with "file:", then it's a path to a file containing the authkey" 
+([tailscale up](https://tailscale.com/kb/1241/tailscale-up)). The 
+key never appears on a command line, so it stays out of shell 
+history and the process list.
+
+**Not on the VM:** `--advertise-exit-node` (the VM is not an exit 
+node; exit nodes are the Apple TVs, see `subnet-routes.tf`) and 
+`--accept-routes` (the ACL gives `tag:server` no access to the home 
+subnet).
+
+**Security: secret sprawl prevention:**
+The output is marked `sensitive = true`, so it is never printed in plain 
+text during `terraform plan` or `terraform apply`. Never paste the 
+key into a command line, a chat, or a committed file. In production, 
+store it in a secrets manager (Azure Key Vault, HashiCorp Vault) and 
+deliver it to the VM through cloud-init or the secrets manager.
 
 ---
 
@@ -169,6 +206,7 @@ resource "tailscale_tailnet_key" "staging_key" {
 | Topic | URL |
 |---|---|
 | Auth keys | https://tailscale.com/kb/1085/auth-keys |
+| `tailscale up --auth-key` | https://tailscale.com/kb/1241/tailscale-up |
 | Auth keys (features) | https://tailscale.com/docs/features/access-control/auth-keys |
 | Tailnet key resource | https://registry.terraform.io/providers/tailscale/tailscale/latest/docs/resources/tailnet_key |
 | OAuth tag ownership | https://github.com/tailscale/tailscale/issues/8299 |

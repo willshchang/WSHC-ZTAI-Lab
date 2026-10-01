@@ -11,7 +11,9 @@
 # Production next steps for each app:
 # - Configure SAML SSO settings in Entra portal
 # - Obtain SSO metadata from each app vendor
-# - Assign appropriate groups per teams_db.csv
+# - Assign appropriate groups per the team list in teams.csv
+#   (the list below is a copy for reference; Terraform does not
+#   read teams.csv)
 
 locals {
   stub_apps = {
@@ -30,10 +32,15 @@ locals {
 
 resource "azuread_application" "stub_apps" {
   for_each     = local.stub_apps
-  display_name = "TinyCo-${each.key}"
+  display_name = "${var.company_name}-${each.key}"
 }
 
 resource "azuread_service_principal" "stub_apps" {
   for_each  = local.stub_apps
   client_id = azuread_application.stub_apps[each.key].client_id
+
+  # No groups are assigned to the stubs yet, so with this set nobody
+  # can get a token for them until access is granted on purpose.
+  # The provider default (false) would let any tenant user or guest in.
+  app_role_assignment_required = true
 }

@@ -102,7 +102,9 @@ Before running `terraform apply`:
 
 **1. Create Tailscale account**  
 Sign up at tailscale.com — sign in with your identity provider 
-(Google or Microsoft) for SSO integration.
+(Google or Microsoft) for SSO integration. The lab tailnet uses the 
+admin's personal identity provider today; moving it to Entra ID 
+(Microsoft) is a planned step.
 
 **2. Install and enroll all devices**  
 Each device must be enrolled in the Tailnet before Terraform 
@@ -155,20 +157,24 @@ terraform plan      # review changes
 terraform apply     # deploy
 ```
 
-**Retrieve VM auth key after apply:**
+**Retrieve the VM auth key after apply** (on the admin machine, in 
+`02-network/terraform`, not on the VM):
 ```bash
 terraform output -raw vm_auth_key
 ```
 
-Use this key to enroll the VM:
+Enroll the VM from a console that does not need port 22 (for 
+example Azure Serial Console), passing the key from a root-only 
+file so it never appears on a command line:
 ```bash
+sudo install -m 600 /dev/null /root/ts-authkey
+sudo nano /root/ts-authkey          # paste the key, save
 curl -fsSL https://tailscale.com/install.sh | sh
-sudo tailscale up \
-  --authkey=$(terraform output -raw vm_auth_key) \
-  --ssh \
-  --accept-routes \
-  --advertise-exit-node
+sudo tailscale up --auth-key=file:/root/ts-authkey --ssh
+sudo shred -u /root/ts-authkey
 ```
+
+Full steps and the single-use key behavior: [08-keys.md](./08-keys.md).
 
 ---
 

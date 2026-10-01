@@ -42,6 +42,13 @@ resource "azuread_service_principal" "mattermost" {
   client_id                     = azuread_application.mattermost.client_id
   preferred_single_sign_on_mode = "saml"
 
+  # Only users and groups with an app role assignment (rbac.tf) can
+  # get a token. The provider default is false, which lets any user
+  # or guest in the tenant sign in. Group-based assignment needs
+  # Entra ID P1: see the licensing matrix in 01-identity/README.md.
+  # https://github.com/hashicorp/terraform-provider-azuread/blob/v2.53.1/docs/resources/service_principal.md
+  app_role_assignment_required = true
+
   feature_tags {
     enterprise            = true
     custom_single_sign_on = true

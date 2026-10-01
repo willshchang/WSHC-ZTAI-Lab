@@ -21,9 +21,50 @@ variable "subscription_id" {
 }
 
 variable "admin_password" {
-  description = "Default password assigned to all TinyCo user accounts"
+  description = "Initial password for new CSV employee accounts. Used at creation only (users.tf ignores later changes). Never used for the break-glass account."
   type        = string
   sensitive   = true
+}
+
+# ============================================================
+# BREAK-GLASS PASSWORD
+# ============================================================
+# A separate secret for the emergency access account, stored
+# offline by the owner. WHY separate: the shared employee initial
+# password is known to everyone who was onboarded with it.
+# users.tf also refuses a value equal to admin_password.
+# ============================================================
+
+variable "breakglass_password" {
+  description = "Password for the break-glass account. At least 16 characters, different from admin_password."
+  type        = string
+  sensitive   = true
+
+  validation {
+    condition     = length(var.breakglass_password) >= 16
+    error_message = "breakglass_password must be at least 16 characters long."
+  }
+}
+
+# ============================================================
+# ROSTER SAFETY THRESHOLD
+# ============================================================
+# Removing a CSV row deletes the account, so a truncated CSV is
+# dangerous. If the roster has fewer rows than this number, the
+# plan stops (see terraform_data.roster_guard in users.tf).
+# Set it to roughly 90% of the current headcount and lower it on
+# purpose when the company really shrinks.
+# ============================================================
+
+variable "min_expected_employees" {
+  description = "Minimum number of rows data/employees.csv must contain before Terraform will plan"
+  type        = number
+  default     = 80
+
+  validation {
+    condition     = var.min_expected_employees >= 1 && floor(var.min_expected_employees) == var.min_expected_employees
+    error_message = "min_expected_employees must be a whole number of at least 1."
+  }
 }
 
 # ============================================================
@@ -52,9 +93,17 @@ variable "domain_name" {
 # and their Role IDs are injected securely at runtime via terraform.tfvars.
 
 variable "entra_role_map" {
-  description = "A map linking Team Names to Entra ID Role GUIDs"
+  description = "A map linking Team Names to Entra ID role template IDs. Must include ITOps."
   type        = map(string)
-  default     = {}
+
+  # groups.tf adds the primary admin to the ITOps admin group
+  # (local.admin_team), so a map without "ITOps" would fail late
+  # with an index error. Keep this literal in sync with
+  # local.admin_team in groups.tf.
+  validation {
+    condition     = contains(keys(var.entra_role_map), "ITOps")
+    error_message = "entra_role_map must contain an \"ITOps\" key (see local.admin_team in groups.tf)."
+  }
 }
 
 variable "azure_role_map" {
@@ -75,14 +124,20 @@ variable "primary_admin_upn" {
 }
 
 # ============================================================
-# BREAK GLASS ADMIN REFERENCE
+# BREAK GLASS ACCOUNT NAME
 # ============================================================
-# This tells Terraform to expect the email address of 
-# the existing admin, but doesn't reveal what it is.
+# The username prefix of the break-glass account. users.tf splits
+# it at the dot into first and last name, so it must contain
+# exactly one dot with text on both sides.
 
 variable "breakglass_account_prefix" {
   description = "The username prefix for the emergency access (break-glass) account (e.g., breakglass.admin)"
   type        = string
+
+  validation {
+    condition     = can(regex("^[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+$", var.breakglass_account_prefix))
+    error_message = "breakglass_account_prefix must look like first.last (letters, digits, underscores or hyphens, exactly one dot), e.g. breakglass.admin."
+  }
 }
 
 # ============================================================
