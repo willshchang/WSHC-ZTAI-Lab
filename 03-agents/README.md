@@ -155,7 +155,7 @@ tools and approval gate.
 | **No made-up results** | The agent's own final words are printed verbatim, and Scarlet's summary must quote them |
 | **Handoff results are data** | Another agent's result is never treated as instructions |
 | **No loops** | Handoff depth is 1: agents can't call Scarlet or each other. Plus a 6-step limit |
-| **Only a finished job counts** | A handoff whose worker ended without acting, hit its step limit or errored is a failed handoff, so Scarlet still has to report it. The worker files its own system alert |
+| **A failed handoff is reported** | A handoff whose worker ended without acting, hit its step limit or errored is a failed handoff, so Scarlet still has to report it. The worker files its own system alert. One known gap: a worker that ran to the end but had its write denied by the human still counts as completed. The denial is recorded in the worker's trace |
 | **Default deny** | Unknown requests and missing details are reported, never guessed |
 | **The handoff contract** | A task must match the agent's exact format (`agents.json`). Injected or garbled text is rejected before the agent starts |
 | **Knowledge is not permission** | `agents.json` describes the agents. Who she may hand work to is set only in her policy, in code |
