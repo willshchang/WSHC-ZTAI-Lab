@@ -64,7 +64,11 @@ const friction = (category: string, request: string, actual: string, evidence: s
 });
 
 const findSignup = (text: string) => signups.find((s) => text.includes(s.id));
-const findHrEvent = (text: string) => /\bhr-\d{4}\b/i.exec(text)?.[0]?.toLowerCase();
+// "hr-1003", "HR 1003" and "hr1003" all name the same event
+const findHrEvent = (text: string) => {
+  const digits = /\bhr[\s-]?(\d{4})\b/i.exec(text)?.[1];
+  return digits ? `hr-${digits}` : undefined;
+};
 const jmlTask = (id: string) => `Process HR event. event_id: ${id}`;
 
 export function createScarletMock(): ModelClient {
@@ -81,7 +85,8 @@ export function createScarletMock(): ModelClient {
       const earlier = said.slice(0, -1).join(" ");
       const done = history(messages);
       const last = (name: string) => [...done].reverse().find((d) => d.name === name);
-      const failed = (d?: Done) => Boolean(d?.output.startsWith("Tool error"));
+      // Any refusal or error from the engine or the tool (results that worked are JSON)
+      const failed = (d?: Done) => Boolean(d && /^(Tool error|Invalid input|Not ready|Denied)/.test(d.output));
       const handoff = last("delegate");
       const reported = Boolean(last("report_friction"));
       const asked = last("ask_human");
@@ -164,14 +169,21 @@ export function createScarletMock(): ModelClient {
         );
       }
 
-      // Scenario 2: a fooled model reaches for an agent it was never given
+      // Scenario 2: a fooled model reaches for an agent it was never given,
+      // or any other handoff that failed (contract, or the worker didn't finish)
       if (handoff && failed(handoff)) {
         if (!reported) {
+          // Refused by the schema's agent list, or by the runtime allowlist
+          const outsidePolicy = /may not delegate to|"agent-[a-z-]+" is not one of/.test(handoff.output);
+          const agent = String(handoff.input.agent ?? "");
           return toolUse(
             "report_friction",
-            friction("unclear_instruction", request,
-              "The request needs a payroll agent, and none is in my policy", handoff.output),
-            "That handoff was blocked by policy. Reporting instead of guessing.",
+            outsidePolicy
+              ? friction("unclear_instruction", request, `The request needs ${agent}, which is not in my policy`, handoff.output.slice(0, 1000))
+              : friction("tool_error", request, `The handoff to ${agent} did not complete`, handoff.output.slice(0, 1000)),
+            outsidePolicy
+              ? "That handoff was blocked by policy. Reporting instead of guessing."
+              : "That handoff didn't complete. Reporting it instead of claiming success.",
           );
         }
         return finish("I couldn't route this request safely, so I reported it to #agent-feedback.");

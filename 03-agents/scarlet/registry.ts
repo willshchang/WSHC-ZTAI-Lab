@@ -18,9 +18,12 @@
 
 import { readFileSync } from "node:fs";
 import type { RunResult } from "../core/agent.ts";
-import type { ParentRef } from "../core/types.ts";
+import type { AgentPolicy, ParentRef } from "../core/types.ts";
 import { runGtm } from "../gtm-signal-router/agent.ts";
+import { gtmPolicy } from "../gtm-signal-router/policy.ts";
 import { runJml, type GraphMode } from "../jml/agent.ts";
+import { jmlPolicy } from "../jml/policy.ts";
+import { scarletPolicy } from "./policy.ts";
 
 export interface RunnerOpts {
   mock: boolean;
@@ -44,7 +47,10 @@ export interface AgentEntry {
   idFormat: string;
   // What a request for this agent can look like (its ids and action
   // words). The chat tool refuses any message that matches, so small
-  // talk can never swallow a real request. Knowledge, reviewed in git.
+  // talk can't swallow a request that uses one of these words. It is a
+  // word list, so a request phrased with none of them can still slip
+  // past; the prompt and the trace are the other layers. Knowledge,
+  // reviewed in git.
   requestPattern: RegExp;
   examples: { request: string; action: string }[];
   run: Runner;
@@ -52,8 +58,28 @@ export interface AgentEntry {
 
 const FILE = new URL("./agents.json", import.meta.url);
 
+// ------------------------------------------------------------
+// ONE IDENTITY, ONE KEY: no two agents may share an id or an API key
+// variable. A copy-paste slip that gave two policies the same key
+// would quietly turn one agent's credential into both. Checked at
+// start, so Scarlet refuses to run with it.
+// ------------------------------------------------------------
+export function checkPolicies(policies: AgentPolicy[]): void {
+  const ids = new Set<string>();
+  const keys = new Map<string, string>();
+  for (const p of policies) {
+    if (ids.has(p.id)) throw new Error(`Refusing to start: two policies use the id "${p.id}"`);
+    ids.add(p.id);
+    const other = keys.get(p.apiKeyEnv);
+    if (other) throw new Error(`Refusing to start: ${other} and ${p.id} share the API key variable ${p.apiKeyEnv}`);
+    keys.set(p.apiKeyEnv, p.id);
+  }
+}
+export const ALL_POLICIES: AgentPolicy[] = [scarletPolicy, gtmPolicy, jmlPolicy];
+
 // `file` is only overridden by tests, to prove a bad directory fails closed
 export function loadRegistry(file: URL | string = FILE): AgentEntry[] {
+  checkPolicies(ALL_POLICIES);
   let raw: unknown;
   try {
     raw = JSON.parse(readFileSync(file, "utf8"));
