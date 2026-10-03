@@ -202,6 +202,22 @@ blocked('colon in a segment', [
   'C:readme.md',
 ]);
 
+// 8.3 short names are a second name for a long one.
+blocked('8.3 short names', [
+  'C:\\Users\\sample\\repo\\01-IDE~1\\TERRAF~1\\TERRAF~1.TFV',
+  'C:\\Users\\sample\\repo\\03-AGE~1\\traces\\run.jsonl',
+  'C:\\Users\\sample\\repo\\03-agents\\jml\\TENANT~1.JSO',
+  '03-AGE~1\\core\\engine.ts',
+  'README~2.md',
+  'C:\\Users\\sample\\other\\NOTES~1.MD',
+]);
+allowed('a tilde with no digit after it', [
+  '~notes.md',
+  'docs\\a~b.md',
+  '03-agents\\core\\engine.ts~',
+  'C:\\Users\\sample\\repo\\~tmp\\x.md',
+]);
+
 allowed('dots, spaces and drive letters in harmless places', [
   'docs\\my notes.md',
   'SaaS data\\readme.md',

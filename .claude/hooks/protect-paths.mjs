@@ -29,12 +29,14 @@ function isAbsolute(p) {
 }
 
 // Windows drops a trailing dot or space from a name, and "name:stream" opens
-// a stream of "name". Either would let a protected file slip past the checks
+// a stream of "name". An 8.3 short name such as TERRAF~1.TFV is a second name
+// for a long one. Any of these would let a protected file slip past the checks
 // below, so a path with such a segment is refused outright.
 function oddSegment(segments) {
   for (const [index, segment] of segments.entries()) {
     if (segment.endsWith('.')) return segment;
     if (segment.endsWith(' ')) return segment;
+    if (/~\d/.test(segment)) return segment;
     const isDrive = index === 0 && /^[a-z]:$/.test(segment);
     if (segment.includes(':') && !isDrive) return segment;
   }
@@ -96,7 +98,7 @@ const rel = file.startsWith(`${root}/`) ? file.slice(root.length + 1) : null;
 
 const odd = oddSegment(segments);
 if (odd !== null) {
-  block(`blocked edit to ${file}. The segment "${odd}" ends in a dot or space, or contains a colon, so the real target cannot be checked.`);
+  block(`blocked edit to ${file}. The segment "${odd}" ends in a dot or space, contains a colon, or looks like a Windows short name (~ and a digit), so the real target cannot be checked.`);
 }
 
 const tail = 'This path is protected by CLAUDE.md. Ask Will for a safe view instead.';
