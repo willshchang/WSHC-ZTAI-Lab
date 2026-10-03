@@ -63,7 +63,8 @@ Strict JSON, no comments. Top key `"$schema": "https://json.schemastore.org/clau
 - The stderr reason starts with a fixed prefix, `protect-paths hook:`, so a hook block can be told apart from a deny-rule block.
 - Blocked: one-line reason on stderr, exit 2. Allowed: exit 0. Paths outside the repo: exit 0, matching the root-anchored deny list.
 - Fails closed: unreadable stdin or a missing `file_path` exits 2 (default deny).
-- The matcher is exported so the test can import it. A comment says the list must stay in step with the deny list in `settings.json`.
+- Nothing is exported and there is no "run only when called directly" guard: the script always runs its check, so there is no way for it to load and silently do nothing. The test spawns the real script for every case. (Changed during the build; the first plan had an exported matcher.)
+- A comment says the list must stay in step with the deny list in `settings.json`.
 
 ### `terraform-fmt.mjs`
 - Reads stdin, exits 0 unless `tool_input.file_path` ends in `.tf`.
@@ -99,7 +100,7 @@ Strict JSON, no comments. Top key `"$schema": "https://json.schemastore.org/clau
 
 ## Verification
 - `node -e` parse of `.claude/settings.json` to confirm strict JSON, and a count of rules per list.
-- `node --test .claude/hooks/` all green, output pasted.
+- `node --test .claude/hooks/protect-paths.test.mjs` all green, output pasted. (Changed during the build: Node 24 does not accept a bare directory here.)
 - Mutation sweep on `protect-paths.mjs`: break each of these in turn and confirm a test fails each time. Results pasted as a table (mutation, failing test).
   - each protected pattern check (one mutation per pattern)
   - the fail-closed branch (bad stdin, missing `file_path`)
@@ -115,6 +116,6 @@ Strict JSON, no comments. Top key `"$schema": "https://json.schemastore.org/clau
 In a new Claude Code session on the branch, before merging:
 1. Accept the trust dialog, run `/status` (settings file loaded, no Settings Error) and `/permissions` (rules listed, no startup warnings).
 2. Ask Claude to read `.env.example` and confirm it is refused.
-3. Ask Claude to edit `.env.example` and confirm the block message comes from the hook, not only the deny rule: the reason must start with `protect-paths hook:`. If only a permission-rule message shows, the hook is not wired up, so do not merge. Not verified yet: I expect the hook to answer first because PreToolUse runs before the permission check, but I have not confirmed that order in the docs. If the deny rule turns out to answer first, I will give you a way to check the hook alone (for example `claude --debug` hook output) before you merge.
+3. Ask Claude to edit `.env.example` and confirm the block message comes from the hook, not only the deny rule: the reason must start with `protect-paths hook:`. If only a permission-rule message shows, the hook is not wired up, so do not merge. Verified in the docs: "A hook that exits with code 2 stops the tool call before permission rules are evaluated" (https://code.claude.com/docs/en/permissions, "Extend permissions with hooks"). So the hook's message is the one expected here.
 4. Ask Claude to edit `03-agents/package.json` and confirm it prompts.
 5. Review in a fresh session, then merge with the commands listed in the PR.
