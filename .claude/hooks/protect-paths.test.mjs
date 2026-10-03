@@ -125,10 +125,90 @@ allowed('mixed capital letters', [
 blocked('mixed separators', ['C:\\Users\\sample\\repo/03-agents/traces\\x.jsonl']);
 allowed('mixed separators', ['C:\\Users\\sample\\repo/03-agents/core\\x.ts']);
 
+// Folder rules are anchored at the repo root, so they stop at its edge.
 allowed('paths outside the repo', [
+  'C:\\Users\\sample\\other\\notes.md',
+  'C:\\Users\\sample\\repo-two\\data\\users.csv',
+  'D:\\Users\\sample\\repo\\03-agents\\traces\\x.jsonl',
+  'C:\\Users\\sample\\other\\03-agents\\jml\\tenant.local.json',
+]);
+
+// Name rules apply everywhere.
+blocked('protected names outside the repo', [
   'C:\\Users\\sample\\other\\.env',
-  'C:\\Users\\sample\\repo-two\\.env',
-  'D:\\Users\\sample\\repo\\.env',
+  'C:\\Users\\sample\\repo-two\\.env.local',
+  'D:\\tf\\terraform.tfstate',
+  'D:\\tf\\terraform.tfstate.backup',
+  'C:\\Users\\sample\\other\\prod.tfvars',
+  '..\\other\\.env',
+  'C:\\Users\\sample\\repo\\..\\other\\.env',
+]);
+
+// Git Bash drive form: /c/ is C:\.
+blocked('git bash drive paths', [
+  '/c/Users/sample/repo/03-agents/.env',
+  '/c/Users/sample/repo/03-agents/traces/x.jsonl',
+  '/C/Users/sample/repo/01-identity/data/users.csv',
+  '/c/Users/sample/repo/03-agents/jml/tenant.local.json',
+]);
+allowed('git bash drive paths', [
+  '/c/Users/sample/repo/README.md',
+  '/c/Users/sample/other/data/users.csv',
+  '/d/Users/sample/repo/03-agents/traces/x.jsonl',
+]);
+test('a project dir in git bash form matches a drive path', () => {
+  const root = '/c/Users/sample/repo';
+  assertBlocked(run('C:\\Users\\sample\\repo\\03-agents\\traces\\x.jsonl', { root }), 'blocked');
+  assertAllowed(run('C:\\Users\\sample\\repo\\README.md', { root }), 'allowed');
+});
+
+// Extended-length and device prefixes name the same file.
+blocked('\\\\?\\ and \\\\.\\ prefixes', [
+  '\\\\?\\C:\\Users\\sample\\repo\\03-agents\\.env',
+  '\\\\?\\C:\\Users\\sample\\repo\\03-agents\\traces\\x.jsonl',
+  '\\\\.\\C:\\Users\\sample\\repo\\03-agents\\jml\\tenant.local.json',
+  '//?/C:/Users/sample/repo/01-identity/data/users.csv',
+]);
+allowed('\\\\?\\ and \\\\.\\ prefixes', [
+  '\\\\?\\C:\\Users\\sample\\repo\\README.md',
+  '\\\\.\\C:\\Users\\sample\\repo\\03-agents\\core\\engine.ts',
+]);
+
+// Windows drops a trailing dot or space, so these would open the real file.
+blocked('trailing dot', [
+  'terraform.tfvars.',
+  '01-identity\\terraform\\terraform.tfvars.',
+  '.env.',
+  '03-agents\\traces.\\x.jsonl',
+  'README.md.',
+  'C:\\Users\\sample\\other\\notes.md.',
+]);
+blocked('trailing space', [
+  '.env ',
+  '03-agents\\.env ',
+  '01-identity\\data \\users.csv',
+  'README.md ',
+  'C:\\Users\\sample\\other\\notes.md ',
+]);
+
+// NTFS streams: "name:stream" opens a stream of "name".
+blocked('colon in a segment', [
+  '.env::$DATA',
+  '03-agents\\.env::$DATA',
+  'C:\\Users\\sample\\repo\\01-identity\\terraform\\terraform.tfvars::$DATA',
+  'README.md:stream',
+  '03-agents\\c:\\readme.md',
+  'C:\\Users\\sample\\repo\\d:\\readme.md',
+  'C:readme.md',
+]);
+
+allowed('dots, spaces and drive letters in harmless places', [
+  'docs\\my notes.md',
+  'SaaS data\\readme.md',
+  '03-agents\\core\\a.b.c.ts',
+  '.gitignore',
+  ' leading-space.md',
+  'D:\\work\\notes.md',
 ]);
 
 // "." and ".." segments.
@@ -144,8 +224,8 @@ blocked('dot segments', [
 allowed('dot segments', [
   '03-agents/traces/../core/x.ts',
   'data/../README.md',
-  '..\\other\\.env',
-  'C:\\Users\\sample\\repo\\..\\other\\.env',
+  '..\\other\\notes.md',
+  'C:\\Users\\sample\\repo\\..\\other\\data\\users.csv',
 ]);
 
 // POSIX roots, as on a Linux runner.
@@ -154,14 +234,17 @@ blocked('posix root', [
   '/home/sample/repo/03-agents/.env',
   '/home/sample/repo/01-identity/data/users.csv',
   '03-agents/traces/run.jsonl',
+  '/home/sample/other/.env',
+  '/home/sample/repo/README.md.',
 ], { root: POSIX_ROOT });
 allowed('posix root', [
   '/home/sample/repo/README.md',
-  '/home/sample/other/.env',
+  '/home/sample/other/data/users.csv',
 ], { root: POSIX_ROOT });
 
 test('a trailing slash on the project dir changes nothing', () => {
-  assertBlocked(run('C:\\Users\\sample\\repo\\03-agents\\.env', { root: 'C:\\Users\\sample\\repo\\' }), 'blocked');
+  assertBlocked(run('C:\\Users\\sample\\repo\\03-agents\\traces\\x.jsonl', { root: 'C:\\Users\\sample\\repo\\' }), 'blocked');
+  assertBlocked(run('01-identity\\data\\users.csv', { root: 'C:\\Users\\sample\\repo\\' }), 'blocked relative');
   assertAllowed(run('C:\\Users\\sample\\repo\\README.md', { root: 'C:\\Users\\sample\\repo\\' }), 'allowed');
 });
 

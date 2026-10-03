@@ -61,7 +61,11 @@ Strict JSON, no comments. Top key `"$schema": "https://json.schemastore.org/clau
 - Blocks when: the file name is `.env` or starts with `.env.`; the name ends in `.tfstate` or contains `.tfstate.`; the name ends in `.tfvars`; any parent folder is named `data`; the path is under `03-agents/traces/`; the path is `03-agents/jml/tenant.local.json`.
 - After the slash conversion, `.` and `..` segments are collapsed with `path.posix.normalize` (on both the file path and the project dir) before the path is made relative to the repo root. So `03-agents\core\..\.env` is checked as `03-agents/.env`. A path whose `..` segments leave the repo counts as outside it.
 - The stderr reason starts with a fixed prefix, `protect-paths hook:`, so a hook block can be told apart from a deny-rule block.
-- Blocked: one-line reason on stderr, exit 2. Allowed: exit 0. Paths outside the repo: exit 0, matching the root-anchored deny list.
+- Blocked: one-line reason on stderr, exit 2. Allowed: exit 0.
+- Changed after review (the first build let some Windows path forms through with exit 0):
+  - The name checks (`.env`, `.env.*`, `*.tfstate`, `*.tfstate.*`, `*.tfvars`) apply to every path, inside or outside the repo. The folder and file rules (`data/`, `03-agents/traces/`, `tenant.local.json`) stay anchored at the repo root. This makes the hook stricter than the deny list on purpose.
+  - Before the repo check, a leading `//?/` or `//./` prefix is stripped and the Git Bash form `/x/` is mapped to `x:/`, on both the file path and the project dir.
+  - Fails closed on any path segment that ends in a dot or a space, or that contains `:` anywhere other than the drive letter. Windows drops a trailing dot or space, and `name:stream` opens a stream of `name`, so the real target of such a path cannot be checked.
 - Fails closed: unreadable stdin or a missing `file_path` exits 2 (default deny).
 - Nothing is exported and there is no "run only when called directly" guard: the script always runs its check, so there is no way for it to load and silently do nothing. The test spawns the real script for every case. (Changed during the build; the first plan had an exported matcher.)
 - A comment says the list must stay in step with the deny list in `settings.json`.
@@ -78,14 +82,19 @@ Strict JSON, no comments. Top key `"$schema": "https://json.schemastore.org/clau
   - full drive paths with the project dir set to match: `C:\Users\sample\repo\03-agents\.env`, `C:\Users\sample\repo\02-network\terraform\terraform.tfstate.backup`
   - mixed capitals in the drive, folders and file name: `c:\USERS\Sample\Repo\03-Agents\JML\Tenant.Local.json`, `01-Identity\Data\Users.CSV`, `.ENV`, `Prod.TFVARS`
   - mixed separators: `C:\Users\sample\repo/03-agents/traces\x.jsonl`
-  - a full drive path outside the repo (`C:\Users\sample\other\.env`) passes, matching the root-anchored deny list
+  - outside the repo, a protected name is blocked (`C:\Users\sample\other\.env`) and a folder rule is not applied (`C:\Users\sample\repo-two\data\users.csv` passes)
+  - Git Bash drive form: `/c/Users/sample/repo/03-agents/.env`, and a project dir given as `/c/...` with a file given as `C:\...`
+  - `\\?\` and `\\.\` prefixes: `\\?\C:\Users\sample\repo\03-agents\.env`
+  - trailing dot or space: `terraform.tfvars.`, `.env `, also on a folder segment
+  - colon in a segment: `.env::$DATA`, `README.md:stream`, a drive-like segment that is not first
+  - allowed controls: inner spaces and dots (`docs\my notes.md`, `a.b.c.ts`), a normal drive path outside the repo
 - Dot segments, blocked: `03-agents\core\..\.env`, `03-agents/./traces/x.jsonl`, `01-identity/terraform/modules/../terraform.tfvars`, `C:\Users\sample\repo\docs\..\03-agents\jml\tenant.local.json`. Allowed: `03-agents/traces/../core/x.ts` (lands outside `traces/`), `data/../README.md` (the `data` segment is gone after collapsing).
 - The sample paths use a made-up user folder (`sample`), never the real one, since the repo is public.
 - Spawns the real script for the exit-code and stderr checks.
 
 ## Known effects and limits (go in the PR description)
 - `.env.example` matches `/**/.env.*`, so Claude can no longer read or edit it. That matches the CLAUDE.md "never read `.env*`" rule.
-- Bash and PowerShell rules match command text. `git -C . push origin main` or `git push origin HEAD:main` is not caught by the `main` deny, though any `git push ...` form still hits the ask rule. `--force-with-lease` also falls to ask, not deny. Branch protection on GitHub stays the real guard for `main`.
+- Bash and PowerShell rules match command text. `git -C . push origin main` or `git push origin HEAD:main` is not caught by the `main` deny, though any `git push ...` form still hits the ask rule. `--force-with-lease` also falls to ask, not deny. The guard for `main` on the GitHub side is the repository ruleset "Protect main" (read with `gh api repos/{owner}/{repo}/rulesets` on 2026-10-03): active, applies to the default branch, no bypass actors. It blocks deletion, blocks force pushes, and requires a pull request before merging (0 required approvals; merge, squash and rebase allowed). It does not require status checks, so CI passing is not enforced by the ruleset.
 - `Read` deny covers Claude's file tools and recognised shell file commands (`cat`, `head`, redirects). It does not stop a script that opens the file itself. The docs point to sandboxing for that.
 - `terraform output *` denies every form, which is stricter than CLAUDE.md (`-json` and `-raw` only), as specified.
 - After the fmt hook rewrites a `.tf` file, Claude has to re-read it before the next edit.
@@ -107,6 +116,7 @@ Strict JSON, no comments. Top key `"$schema": "https://json.schemastore.org/clau
   - the case folding (remove the lower-casing)
   - the backslash conversion (leave `\` as is)
   - the `..` handling (remove the `path.posix.normalize` call)
+  - added after review: name checks limited to the repo again, the `/x/` to `x:/` mapping, the `//?/` strip, the `//./` strip, the odd-segment check as a whole, the trailing dot rule, the trailing space rule, the colon rule, and the drive letter exception (removed, and accepted at any position)
 - If any mutation survives, I add or fix a test until it is killed. The hook code is not bent to fit the test. Originals restored from a backup copy in the scratchpad, never `git checkout --`.
 - Manual run of both hooks with sample JSON on stdin: a protected path gives exit 2 plus reason, a normal path gives exit 0, a badly formatted scratch `.tf` file comes back formatted.
 - Scan the new files for control characters and non-ASCII.
