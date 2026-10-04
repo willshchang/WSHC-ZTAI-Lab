@@ -10,3 +10,9 @@ updates:
     directory: /03-agents
     schedule:
       interval: weekly
+    # @types/node tracks the Node major we run (22, see engines in
+    # 03-agents/package.json). Majors are ignored; minor and patch still come.
+    # Raise this by hand when the Node major moves.
+    ignore:
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
