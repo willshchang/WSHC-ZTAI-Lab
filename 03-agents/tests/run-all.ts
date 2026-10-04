@@ -9,25 +9,12 @@
 
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import { runScripts } from "./npm-run.ts";
 
 const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { scripts: Record<string, string> };
 const names = ["typecheck", ...Object.keys(pkg.scripts).filter((s) => s.startsWith("test:")).sort()];
 
-let failed = 0;
-let checks = 0;
-for (const name of names) {
-  const r = spawnSync("npm", ["run", "-s", name], { stdio: ["ignore", "pipe", "pipe"], encoding: "utf8", cwd: new URL("..", import.meta.url) });
-  const out = `${r.stdout ?? ""}${r.stderr ?? ""}`;
-  const ok = (out.match(/^OK/gm) ?? []).length;
-  const bad = out.split("\n").filter((l) => l.startsWith("FAIL"));
-  checks += ok;
-  if (r.status !== 0 || bad.length > 0) {
-    failed++;
-    console.log(`FAIL ${name} (exit ${r.status})`);
-    console.log(bad.length ? bad.join("\n") : out);
-  } else {
-    console.log(`ok   ${name}${ok ? ` (${ok} checks)` : ""}`);
-  }
-}
+const { failed, checks } = runScripts(names, (command, args) =>
+  spawnSync(command, args, { stdio: ["ignore", "pipe", "pipe"], encoding: "utf8", cwd: new URL("..", import.meta.url) }));
 console.log(`\n${names.length - failed}/${names.length} passed, ${checks} checks in total`);
 process.exit(failed ? 1 : 0);

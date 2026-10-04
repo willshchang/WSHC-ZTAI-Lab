@@ -24,6 +24,7 @@
     "test:chat": "node tests/chat.ts",
     "test:engine": "node tests/engine.ts",
     "test:gtm": "node tests/gtm.ts",
+    "test:runner": "node tests/runner.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
