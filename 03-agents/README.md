@@ -365,8 +365,15 @@ npm run test:graph         # real Graph writes are safe to repeat, throttling, p
 npm run test:mock-tag      # test runs are tagged [MOCK] in Slack, real runs never are
 npm run test:act-first     # Scarlet must use a tool until she acts; never forced on models that reject it
 npm run test:chat          # chat is small talk only: it refuses anything an agent could act on
+npm run test:runner        # npm test itself: cmd.exe on Windows, unsafe script names refused
 npm run typecheck          # type-check everything
 ```
+
+`npm test` works on Windows, Linux and macOS. On Windows `npm` is `npm.cmd`,
+which Node can't start without a shell, so the runner goes through
+`cmd.exe /c` as the [Node docs](https://nodejs.org/api/child_process.html#spawning-bat-and-cmd-files-on-windows)
+describe. A script name that isn't letters, digits, `_`, `:` or `-` is refused
+before anything is spawned.
 
 Without Slack webhooks, posts are printed as a dry run instead of sent.
 
@@ -383,7 +390,8 @@ nothing. The sweeps found and fixed checks that were passing for the wrong
 reason, for example a grep that matched a header instead of a real tool call,
 and a password test that searched for the word "password" instead of the real
 value. Every new control since ships with its own sweep (JML guards, safe
-repeats, status cards, already-done reporting, `[MOCK]` tagging, act first, the chat backstop).
+repeats, status cards, already-done reporting, `[MOCK]` tagging, act first, the chat backstop,
+the test runner's script name check).
 The latest sweep broke 39 controls one at a time (allowlists, the approval
 gate, default deny, deny after a no, the trace stamp, the per-agent key, error
 handling, the terminal sanitizer, draft binding, id binding, Slack escaping,
