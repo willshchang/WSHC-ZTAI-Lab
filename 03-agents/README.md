@@ -369,7 +369,7 @@ npm run test:runner        # npm test itself: cmd.exe on Windows, unsafe script 
 npm run typecheck          # type-check everything
 ```
 
-`npm test` works on Windows, Linux and macOS. On Windows `npm` is `npm.cmd`,
+`npm test` also runs on Windows (checked by hand; CI is Linux). On Windows `npm` is `npm.cmd`,
 which Node can't start without a shell, so the runner goes through
 `cmd.exe /c` as the [Node docs](https://nodejs.org/api/child_process.html#spawning-bat-and-cmd-files-on-windows)
 describe. A script name that isn't letters, digits, `_`, `:` or `-` is refused
