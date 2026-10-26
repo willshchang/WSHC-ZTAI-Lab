@@ -194,25 +194,8 @@ Agentic Applications), its status and the test that proves it are in the
 
 ## Identity Journey
 
-How a new hire goes from an HR record to working access:
-
-```mermaid
-%%{init: {"flowchart": {"htmlLabels": false}}}%%
-flowchart LR
-    hr["HR export<br/>explicit files"]
-    etl["ETL script<br/>checks headers,<br/>teams, names"]
-    plan{"terraform plan<br/>roster guard"}
-    user["Entra account<br/>department set"]
-    grp["Team group<br/>dynamic rule"]
-    apps["SSO apps<br/>assignment required"]
-
-    hr --> etl
-    etl -->|"staged CSV"| plan
-    plan -->|"human review,<br/>then apply"| user
-    user -->|"P1"| grp
-    grp -->|"group assignment, P1"| apps
-    user -.->|"MFA through<br/>Conditional Access, P1"| apps
-```
+How a new hire goes from an HR record to working access. The diagram is in
+[01-identity](./01-identity/README.md#identity-journey).
 
 1. HR adds the person to the export with their team
 2. The ETL script checks the file and stages it

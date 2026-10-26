@@ -8,39 +8,13 @@
 
 ---
 
-```mermaid
-%%{init: {"flowchart": {"htmlLabels": false}}}%%
-flowchart TB
-    eng["Engineer devices<br/>admin's Tailscale login"]
-
-    subgraph A["Site A · Azure cloud"]
-        vm["tinyco-vm (Ubuntu)<br/>tag:server<br/>Tailscale SSH only"]
-    end
-
-    subgraph B["Site B · Home LAN"]
-        direction TB
-        r1["Subnet router 1<br/>primary<br/>tag:subnet-router"]
-        r2["Subnet router 2<br/>HA failover<br/>tag:subnet-router"]
-        lan["Non-Tailscale devices<br/>modem, access point"]
-    end
-
-    eng -->|"SSH as your identity"| vm
-    eng -->|"home subnet"| r1
-    eng -.->|"exit node, when on"| r1
-    r1 --> lan
-    r2 -.->|"takes over on failure"| lan
-```
-
-Each labelled solid arrow is a grant in `acl.tf`; anything not granted is blocked.
-The Azure VM has no outbound grant: deny tests prove it cannot reach the home
-subnet or the subnet routers.
-
 ## Overview
 
 This document describes the full Zero Trust network architecture 
 implemented in the WSHC lab — covering the Tailscale network 
 layer, site-to-site topology, ACL policy design, and how it is 
-meant to line up with the Entra ID identity model.
+meant to line up with the Entra ID identity model. The network
+diagram is in the [network README](../README.md#architecture).
 
 For setup and troubleshooting procedures, see:
 - [01-Subnet_Router_Setup_and_Troubleshooting.md](./01-Subnet_Router_Setup_and_Troubleshooting.md)
