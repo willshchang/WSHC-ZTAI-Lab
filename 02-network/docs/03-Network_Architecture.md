@@ -3,7 +3,7 @@
 **Document Type:** Network Architecture Reference  
 **Author:** Will Chang, Zero Trust AI Engineer  
 **Audience:** IT Administrator  
-**Last Updated:** September 2026  
+**Last Updated:** October 2026  
 **Repository:** https://github.com/willshchang/WSHC-ZTAI-Lab  
 
 ---
@@ -58,6 +58,25 @@ reaching any resource.
 | SSH | Tailscale SSH — identity authenticated, no password |
 | Port 22 | Closed via Azure NSG — public internet cannot reach |
 
+### Site B — Home LAN
+
+| Property | Value |
+|---|---|
+| Subnet | `192.168.1.0/24` |
+| Tailscale tag | `tag:subnet-router` |
+| Primary router | `tv-primary` — Apple TV, ethernet, `100.x.y.20` |
+| HA router | `tv-ha` — Apple TV, WiFi, `100.x.y.21` |
+| Gateway | `192.168.1.1` — ISP modem |
+| AP | `192.168.1.2` — Wi-Fi router (AP mode) |
+
+### Engineer Devices
+
+| Device | Tailscale name | Identity |
+|---|---|---|
+| Windows PC | `admin-pc` | `admin@example.com` |
+| iPad Pro | `admin-tablet` | `admin@example.com` |
+| iPhone | `admin-phone` | `admin@example.com` |
+
 ---
 
 ## Azure VNet — Understanding the Cloud Network Layer
@@ -79,11 +98,14 @@ isolation from other Azure customers.
 
 When `tinyco-vm` was deployed, Azure automatically placed it 
 inside a VNet:
+
+```
 Azure Cloud
 └── VNet — 10.0.0.0/24
-└── tinyco-vm
-├── Private IP: 10.0.0.4 (internal, VNet only)
-└── Public IP:  <vm-public-ip> (internet-facing, port 22 closed)
+    └── tinyco-vm
+        ├── Private IP: 10.0.0.4 (internal, VNet only)
+        └── Public IP:  <vm-public-ip> (internet-facing, port 22 closed)
+```
 
 This is visible in the VM's routing table:
 
@@ -98,23 +120,9 @@ default via 10.0.0.1 dev eth0       ← Azure internet gateway
 The `10.0.0.0/24` is the VNet subnet. The VM lives inside 
 it with a private IP of `10.0.0.4`.
 
-### RFC 1918 — Private IP Ranges
-
-VNet IP ranges follow **RFC 1918** — the internet standard 
-for private network addresses. These ranges are reserved and 
-never appear on the public internet:
-
-| Range | Common use |
-|---|---|
-| `10.0.0.0/8` | Large enterprise networks, cloud VPCs |
-| `172.16.0.0/12` | Mid-size networks, Docker default |
-| `192.168.0.0/16` | Home networks, small offices |
-
-> **Lab comparison:** Your home LAN uses `192.168.1.0/24` 
-> (RFC 1918). Azure VNet uses `10.0.0.0/24` (RFC 1918). 
-> Tailscale uses `100.64.0.0/10` — a separate reserved range 
-> called CGNAT, purpose-built for overlay networks like 
-> Tailscale's mesh.
+The VNet range is a private range from RFC 1918, explained in
+[RFC 1918 — Private IP Addressing Explained](#rfc-1918--private-ip-addressing-explained)
+below.
 
 ### VNet vs Home LAN vs Tailscale
 
@@ -132,10 +140,13 @@ never appear on the public internet:
 In a production environment, a VNet would be segmented into 
 multiple subnets — each with its own NSG rules and access 
 controls:
+
+```
 Azure VNet (10.0.0.0/16)
 ├── Web subnet      (10.0.1.0/24) — public-facing, port 443 open
 ├── Database subnet (10.0.2.0/24) — no internet, internal only
 └── Admin subnet    (10.0.3.0/24) — Tailscale SSH only, port 22 closed
+```
 
 Tailscale bridges all of these — engineers SSH directly into 
 the admin subnet via Tailscale identity, databases stay 
@@ -158,14 +169,7 @@ enforced at every layer.
 | Azure NSG | https://learn.microsoft.com/en-us/azure/virtual-network/network-security-groups-overview |
 | Tailscale CGNAT range | https://tailscale.com/blog/how-tailscale-works#cgnat-address-space |
 
-Put it right under the VNet section — it flows naturally there since you just introduced the IP ranges in the table. Reading order becomes:
-VNet section → explains 10.0.0.0/24
-    ↓
-RFC 1918 section → explains WHY that range exists
-    ↓
-Reader fully understands the network addressing story
-Here's the section:
-markdown---
+---
 
 ## RFC 1918 — Private IP Addressing Explained
 
@@ -263,31 +267,15 @@ sudo tailscale set --advertise-routes=8.8.8.0/24
 | Tailscale IP addressing | https://tailscale.com/kb/1015/100.x-addresses |
 | Docker networking | https://docs.docker.com/network/ |
 
-### Site B — Home LAN
-
-| Property | Value |
-|---|---|
-| Subnet | `192.168.1.0/24` |
-| Tailscale tag | `tag:subnet-router` |
-| Primary router | `tv-primary` — Apple TV, ethernet, `100.x.y.20` |
-| HA router | `tv-ha` — Apple TV, WiFi, `100.x.y.21` |
-| Gateway | `192.168.1.1` — ISP modem |
-| AP | `192.168.1.2` — Wi-Fi router (AP mode) |
-
-### Engineer Devices
-
-| Device | Tailscale name | Identity |
-|---|---|---|
-| Windows PC | `admin-pc` | `admin@example.com` |
-| iPad Pro | `admin-tablet` | `admin@example.com` |
-| iPhone | `admin-phone` | `admin@example.com` |
-
 ---
 
 ## Tailscale SSH Architecture
 
 ### Before Tailscale SSH
+
+```
 Engineer → public internet → port 22 open → password auth → VM
+```
 
 Weaknesses:
 - Port 22 exposed to the internet
@@ -296,8 +284,11 @@ Weaknesses:
 - No audit trail in Tailscale
 
 ### After Tailscale SSH
+
+```
 Engineer → Tailscale identity (admin's Tailscale login today; Entra SSO planned) → ACL validates →
 Tailscale intercepts SSH → VM (no open ports)
+```
 
 Improvements:
 - Port 22 closed to public internet via Azure NSG
@@ -338,6 +329,8 @@ Improvements:
 > home LAN.
 
 ### How it works
+
+```
 Azure VM (Site A, 100.x.y.10)
 ↓ Tailscale encrypted tunnel
 Apple TV subnet router (Site B, 100.x.y.20)
@@ -346,6 +339,7 @@ Apple TV subnet router (Site B, 100.x.y.20)
 → 192.168.1.1 (ISP modem)
 → 192.168.1.2 (Wi-Fi AP)
 → Any non-Tailscale device on the subnet
+```
 
 ### Connection type
 
@@ -370,8 +364,11 @@ Azure VM's Tailscale IP.
 ## High Availability Subnet Routing
 
 Two Apple TVs advertise the same `192.168.1.0/24` subnet:
+
+```
 tv-primary (primary, ethernet) ─── 192.168.1.0/24
-tv-ha (standby, WiFi)    ─── 192.168.1.0/24
+tv-ha (standby, WiFi)          ─── 192.168.1.0/24
+```
 
 Tailscale selects `tv-primary` as primary (lower latency 
 via ethernet). If primary goes offline, Tailscale automatically 

@@ -118,7 +118,7 @@ structure (groups, apps, ACL), the JML agent owns people. Network detail is in
 | **ABAC dynamic groups** | Group membership follows the user's `department` attribute. Change the department, the access follows automatically. |
 | **RBAC** | Roles granted to groups, never directly to people. One `setproduct()` loop assigns every group to every app it needs. |
 | **Conditional Access** | MFA required for everyone. Legacy authentication (the old protocols that can't do MFA) is blocked. Needs Entra ID P1: the policies are in code, and frozen on today's Free tenant. |
-| **SSO** | Single sign-on to Tailscale (OIDC), Mattermost, Tableau and Elastic (SAML). |
+| **SSO** | Single sign-on to Mattermost, Tableau and Elastic (SAML). The Tailscale app (OIDC) exists in Entra, but the tailnet doesn't sign in through Entra yet (Roadmap: [Tailnet on Entra ID](#roadmap)). |
 | **SCIM** | Tableau accounts are created and removed automatically from Entra. |
 | **Privileged Access (foundations)** | Admin roles only through dedicated role-assignable groups. Break-glass account with its own credential, a direct permanent Global Administrator role, a group-based Conditional Access exclusion and protection from deletion. |
 | **App assignment required** | SSO apps issue a token only to users or groups assigned to them, never to anyone who happens to be in the tenant. |
@@ -250,7 +250,7 @@ WSHC-ZTAI-Lab/
 │   └── docs/                ← subnet routing, ACL, network architecture, Tailscale SSH
 │       └── iac/             ← one doc per Terraform file
 │
-├── 03-agents/               ← Layer 3: Zero Trust AI agents (in progress)
+├── 03-agents/               ← Layer 3: Zero Trust AI agents
 │   ├── core/                ← shared agent engine: policy, approval, trace
 │   ├── gtm-signal-router/   ← first agent: routes signups, human-approved
 │   ├── scarlet/             ← coordinator: routes requests to agents, holds no data tools
@@ -368,7 +368,7 @@ terraform apply
 | **Terraform remote state** | Shared, locked, encrypted state instead of a local state file (state holds passwords and keys) |
 | **Tailnet on Entra ID** | Tailnet sign-in through Entra ID, with SCIM groups in the ACL, so one identity provider and one MFA policy gate both layers |
 | **Automated access reviews** | Scheduled review of who still needs what |
-| **`03-agents/`** (in progress) | Extend the same identity and network controls to AI agents: scoped identities per agent, least-privilege tool access, human approval, traces. Built: [GTM Signal Router](./03-agents/README.md), the Scarlet coordinator and the JML agent (Entra ID, least-privilege Graph permissions), each with its own API key. Next: split JML per event type, secretless identity, network-level containment |
+| **`03-agents/` next steps** | The same identity and network controls, applied to AI agents: scoped identities per agent, least-privilege tool access, human approval, traces. Built: [GTM Signal Router](./03-agents/README.md), the Scarlet coordinator and the JML agent (Entra ID, least-privilege Graph permissions), each with its own API key. Next: split JML per event type, secretless identity, network-level containment |
 | **Agent observability** | Follow every agent run end to end and live: what triggered it, what it decided, which identity it used, what it touched and the outcome. One OpenTelemetry trace per run, identity on every span, secrets redacted before storage. Today the lab has visibility only (Tailscale configuration audit logs); network flow logs require a Tailscale Premium or Enterprise plan. |
 
 ---

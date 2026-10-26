@@ -3,7 +3,7 @@
 **Document Type:** Layer Overview  
 **Author:** Will Chang, Zero Trust AI Engineer  
 **Audience:** IT Administrator  
-**Last Updated:** September 2026  
+**Last Updated:** October 2026  
 **Repository:** https://github.com/willshchang/WSHC-ZTAI-Lab  
 
 ---
@@ -170,7 +170,7 @@ tools and approval gate.
 | **Fails closed** | A malformed `agents.json`, or one naming an agent with no runner, stops Scarlet from starting |
 | **Commands vs questions** | A command ("route pixel-pine") is acted on right away. A question ("what can you do about pixel-pine?") gets an offer first, and only a yes starts the job. Two separate consents: to the task (Scarlet's offer) and to the action (the agent's approval gate) |
 | **Human in the loop, both ways** | With Will at the keyboard she can ask; with no one there the question is denied and she reports the gap. Max 3 questions; answers never change her permissions |
-| **Act first** | Until she has handed off, reported, stood by or chatted, the API call forces a tool call (`tool_choice: any`), so a greeting becomes a `chat` reply instead of plain text and a reminder. A refused `chat` doesn't count, so a request still has to be delegated, offered or asked about. Once she has acted she can finish with a summary. Only on models that accept it (an allowlist, Haiku 4.5 today): Opus 5.5 and Sonnet 5.5 reject forced tool calls, and an unknown model gets the safe default |
+| **Act first** | Until she has handed off, reported, stood by or chatted, the API call forces a tool call (`tool_choice: any`), so a greeting becomes a `chat` reply instead of plain text and a reminder. A refused `chat` doesn't count, so a request still has to be delegated, offered or asked about. Once she has acted she can finish with a summary. Only on models that accept it (an allowlist, Haiku 4.5 today): Opus 5.5, Sonnet 5.5, Fable 5.1 and Mythos 5.1 reject forced tool calls, and an unknown model gets the safe default |
 | **No silent failure** | The backstop. If she ends by only talking anyway, she gets one reminder. Then the system files the alert, marks the run `no_action`, and shows a warning. Standing by counts as acting only because it's an explicit, traced decision |
 | **Session memory, hers alone** | In a chat session she remembers the last 20 messages (text only, never raw tool data), so "route it" works. Workers never see it: the contract task is all they get. Wiped on `exit` or after 30 minutes idle, never saved to disk. One session ID joins every trace in the session |
 | **Joined traces** | One request ID runs through Scarlet's trace and the agent's trace. The agent's trace also records which run handed it the work (the same parent/child idea as OpenTelemetry spans), and Scarlet's records the worker's trace as `traces/<file>`, relative, never an absolute path |
