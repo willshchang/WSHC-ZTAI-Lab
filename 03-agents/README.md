@@ -44,24 +44,30 @@ Most agent demos give the model one admin key and hope. Here every agent gets:
 
 Every tool call passes four checks, and no run ends without acting.
 
+Dotted: a reply to the model. A refusal doesn't end the run; the model is told
+and carries on. Every step is also written to the trace (not drawn).
+
 ```mermaid
 %%{init: {"flowchart": {"htmlLabels": false}}}%%
 flowchart TD
-    task["Task arrives<br/>from Will, Scarlet, CI"] --> model["Model reasons<br/>act first: a tool call<br/>is forced until it acts"]
+    task["Task arrives<br/>from Will, Scarlet, CI"] --> model["Model reasons<br/>Scarlet only: a tool call<br/>is forced until she acts"]
     model -->|"done"| acted{"Acted?"}
     acted -->|"yes"| finish["Finish<br/>summary, run ends"]
     acted -->|"no"| remind["Nothing done yet<br/>one reminder, then<br/>a system alert"]
     remind -->|"try again"| model
     model -->|"tool request"| policy{"In its policy?"}
-    policy -->|"no"| refused["Refused<br/>traced, model told no"]
+    policy -->|"no"| refused["Refused<br/>traced"]
     policy -->|"yes"| schema{"Input matches<br/>the schema?"}
-    schema -->|"no"| invalid["Refused<br/>traced, model told why"]
+    schema -->|"no"| invalid["Refused<br/>traced"]
     schema -->|"yes"| risk{"Risk tier?"}
     risk -->|"read / internal-write"| run["Run the tool<br/>result to the trace"]
     risk -->|"external-write"| human{"Human<br/>approves?"}
     human -->|"yes"| run
-    human -->|"no"| denied["Not approved<br/>traced, told to stop"]
-    run -->|"result back<br/>to the model"| model
+    human -->|"no"| denied["Not approved<br/>traced; later writes<br/>in the run denied too"]
+    run -.->|"result"| model
+    refused -.->|"told no"| model
+    invalid -.->|"told why"| model
+    denied -.->|"told to stop"| model
 ```
 
 Every step is written to the trace, stamped with the agent ID ([sample traces and how to investigate with them](./examples/sample-traces/README.md)). Hitting the
@@ -114,6 +120,8 @@ number.
 Scarlet is the main agent Will works alongside. She knows the map and routes
 each request to the one agent whose job it is. She holds no data tools of her own. **A coordinator routes, it never holds:** if
 she held the other agents' tools, she would be the god-mode agent by the back door.
+
+Dotted: a reply. A worker's result comes back to Scarlet as data.
 
 ```mermaid
 %%{init: {"flowchart": {"htmlLabels": false}}}%%

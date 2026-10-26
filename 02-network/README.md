@@ -53,19 +53,25 @@ flowchart TB
 
     subgraph B["Site B · Home LAN"]
         direction TB
-        r1["Subnet router 1<br/>primary<br/>tag:subnet-router"]
-        r2["Subnet router 2<br/>HA failover<br/>tag:subnet-router"]
-        lan["Non-Tailscale devices<br/>modem, access point"]
+        r1["Subnet router 1<br/>primary, exit node<br/>tag:subnet-router"]
+        r2["Subnet router 2<br/>HA standby, exit node<br/>tag:subnet-router"]
+        lan["Home LAN devices<br/>192.168.1.0/24"]
     end
+
+    net(("Internet"))
 
     eng -->|"SSH as your identity"| vm
     eng -->|"home subnet"| r1
-    eng -.->|"exit node, when on"| r1
+    eng -->|"exit node, when on"| r1
     r1 --> lan
-    r2 -.->|"takes over on failure"| lan
+    r2 -->|"on failure: takes over"| lan
+    r1 -->|"exit node traffic"| net
 ```
 
-Each labelled solid arrow is a grant in `acl.tf`; anything not granted is blocked.
+Every arrow from the engineer devices is a grant in `acl.tf` (the exit node is
+the `autogroup:internet` grant, and both Apple TVs are approved exit nodes when
+`exit_node_enabled` is on); anything not granted is blocked. Router 2 advertises
+the same subnet and takes over if router 1 fails.
 The Azure VM has no grant to the home LAN: it is internet-facing, so ACL deny
 tests prove it cannot reach the home subnet or the subnet routers.
 Terraform manages the ACL, device tags, route approvals and auth keys for both

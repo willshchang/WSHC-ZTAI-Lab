@@ -154,6 +154,10 @@ and HR data are treated as data, never as instructions. Every tool call goes
 through the engine's checks, every external write waits for a human who sees
 exactly what will be sent, and every step is traced with the agent's identity.
 
+Dotted: written to the trace. Left out: JML's `#jml-status` card and the system
+alerts in `#agent-feedback`, which code posts to Slack itself, not through these
+checks (see [03-agents](./03-agents/README.md)).
+
 ```mermaid
 %%{init: {"flowchart": {"htmlLabels": false}}}%%
 flowchart LR
@@ -163,11 +167,11 @@ flowchart LR
 
     subgraph RT["Agent runtime"]
         worker["Worker agent<br/>own key, own tools,<br/>bound to its task id"]
-        gate{"Engine checks<br/>allowlist, schema"}
+        gate{"Engine checks<br/>policy, schema,<br/>risk tier"}
     end
 
     you(("You<br/>approve or deny"))
-    inside["Read tools; friction reports<br/>and status cards to Slack<br/>(escaped, no approval)"]
+    inside["Read tools and<br/>internal writes"]
 
     subgraph EXT["Outside systems"]
         entra["Microsoft Graph<br/>protected accounts refused"]
@@ -181,8 +185,9 @@ flowchart LR
     worker <-->|"per-agent key"| model
     worker -->|"tool call"| gate
     gate -->|"read or<br/>internal write"| inside
+    inside -->|"friction reports,<br/>no approval"| slack
     gate -->|"external write:<br/>exact text shown"| you
-    you -->|"approved draft or plan only"| EXT
+    you -->|"approved post or plan only"| EXT
     gate -.->|"every step"| trace
 ```
 
