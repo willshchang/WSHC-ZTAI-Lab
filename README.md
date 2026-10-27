@@ -118,7 +118,7 @@ structure (groups, apps, ACL), the JML agent owns people. Network detail is in
 | **ABAC dynamic groups** | Group membership follows the user's `department` attribute. Change the department, the access follows automatically. |
 | **RBAC** | Roles granted to groups, never directly to people. One `setproduct()` loop assigns every group to every app it needs. |
 | **Conditional Access** | MFA required for everyone. Legacy authentication (the old protocols that can't do MFA) is blocked. Needs Entra ID P1: the policies are in code, and frozen on today's Free tenant. |
-| **SSO** | Single sign-on to Tailscale (OIDC), Mattermost, Tableau and Elastic (SAML). |
+| **SSO** | Single sign-on to Mattermost, Tableau and Elastic (SAML). The Tailscale app (OIDC) exists in Entra, but the tailnet doesn't sign in through Entra yet (Roadmap: [Tailnet on Entra ID](#roadmap)). |
 | **SCIM** | Tableau accounts are created and removed automatically from Entra. |
 | **Privileged Access (foundations)** | Admin roles only through dedicated role-assignable groups. Break-glass account with its own credential, a direct permanent Global Administrator role, a group-based Conditional Access exclusion and protection from deletion. |
 | **App assignment required** | SSO apps issue a token only to users or groups assigned to them, never to anyone who happens to be in the tenant. |
@@ -154,6 +154,10 @@ and HR data are treated as data, never as instructions. Every tool call goes
 through the engine's checks, every external write waits for a human who sees
 exactly what will be sent, and every step is traced with the agent's identity.
 
+Dotted: written to the trace. Left out: JML's `#jml-status` card and the system
+alerts in `#agent-feedback`, which code posts to Slack itself, not through these
+checks (see [03-agents](./03-agents/README.md)).
+
 ```mermaid
 %%{init: {"flowchart": {"htmlLabels": false}}}%%
 flowchart LR
@@ -163,11 +167,11 @@ flowchart LR
 
     subgraph RT["Agent runtime"]
         worker["Worker agent<br/>own key, own tools,<br/>bound to its task id"]
-        gate{"Engine checks<br/>allowlist, schema"}
+        gate{"Engine checks<br/>policy, schema,<br/>risk tier"}
     end
 
     you(("You<br/>approve or deny"))
-    inside["Read tools; friction reports<br/>and status cards to Slack<br/>(escaped, no approval)"]
+    inside["Read tools and<br/>internal writes"]
 
     subgraph EXT["Outside systems"]
         entra["Microsoft Graph<br/>protected accounts refused"]
@@ -181,8 +185,9 @@ flowchart LR
     worker <-->|"per-agent key"| model
     worker -->|"tool call"| gate
     gate -->|"read or<br/>internal write"| inside
+    inside -->|"friction reports,<br/>no approval"| slack
     gate -->|"external write:<br/>exact text shown"| you
-    you -->|"approved draft or plan only"| EXT
+    you -->|"approved post or plan only"| EXT
     gate -.->|"every step"| trace
 ```
 
@@ -194,25 +199,8 @@ Agentic Applications), its status and the test that proves it are in the
 
 ## Identity Journey
 
-How a new hire goes from an HR record to working access:
-
-```mermaid
-%%{init: {"flowchart": {"htmlLabels": false}}}%%
-flowchart LR
-    hr["HR export<br/>explicit files"]
-    etl["ETL script<br/>checks headers,<br/>teams, names"]
-    plan{"terraform plan<br/>roster guard"}
-    user["Entra account<br/>department set"]
-    grp["Team group<br/>dynamic rule"]
-    apps["SSO apps<br/>assignment required"]
-
-    hr --> etl
-    etl -->|"staged CSV"| plan
-    plan -->|"human review,<br/>then apply"| user
-    user -->|"P1"| grp
-    grp -->|"group assignment, P1"| apps
-    user -.->|"MFA through<br/>Conditional Access, P1"| apps
-```
+How a new hire goes from an HR record to working access. The diagram is in
+[01-identity](./01-identity/README.md#identity-journey).
 
 1. HR adds the person to the export with their team
 2. The ETL script checks the file and stages it
@@ -262,7 +250,7 @@ WSHC-ZTAI-Lab/
 │   └── docs/                ← subnet routing, ACL, network architecture, Tailscale SSH
 │       └── iac/             ← one doc per Terraform file
 │
-├── 03-agents/               ← Layer 3: Zero Trust AI agents (in progress)
+├── 03-agents/               ← Layer 3: Zero Trust AI agents
 │   ├── core/                ← shared agent engine: policy, approval, trace
 │   ├── gtm-signal-router/   ← first agent: routes signups, human-approved
 │   ├── scarlet/             ← coordinator: routes requests to agents, holds no data tools
@@ -380,7 +368,7 @@ terraform apply
 | **Terraform remote state** | Shared, locked, encrypted state instead of a local state file (state holds passwords and keys) |
 | **Tailnet on Entra ID** | Tailnet sign-in through Entra ID, with SCIM groups in the ACL, so one identity provider and one MFA policy gate both layers |
 | **Automated access reviews** | Scheduled review of who still needs what |
-| **`03-agents/`** (in progress) | Extend the same identity and network controls to AI agents: scoped identities per agent, least-privilege tool access, human approval, traces. Built: [GTM Signal Router](./03-agents/README.md), the Scarlet coordinator and the JML agent (Entra ID, least-privilege Graph permissions), each with its own API key. Next: split JML per event type, secretless identity, network-level containment |
+| **`03-agents/` next steps** | The same identity and network controls, applied to AI agents: scoped identities per agent, least-privilege tool access, human approval, traces. Built: [GTM Signal Router](./03-agents/README.md), the Scarlet coordinator and the JML agent (Entra ID, least-privilege Graph permissions), each with its own API key. Next: split JML per event type, secretless identity, network-level containment |
 | **Agent observability** | Follow every agent run end to end and live: what triggered it, what it decided, which identity it used, what it touched and the outcome. One OpenTelemetry trace per run, identity on every span, secrets redacted before storage. Today the lab has visibility only (Tailscale configuration audit logs); network flow logs require a Tailscale Premium or Enterprise plan. |
 
 ---

@@ -2,7 +2,7 @@
 
 **Author:** Will Chang, Zero Trust AI Engineer  
 **Audience:** IT Administrator  
-**Last Updated:** September 2026  
+**Last Updated:** October 2026  
 **Repository:** https://github.com/willshchang/WSHC-ZTAI-Lab  
 
 ---
@@ -65,9 +65,12 @@ flowchart TB
         direction LR
         users["Users<br/>from the HR CSV"]
         groups["Team groups<br/>dynamic, P1"]
+        roles["Admin roles<br/>static role groups, P1"]
         ca["Conditional Access<br/>MFA, no legacy auth, P1"]
-        roles["Admin roles<br/>static role groups"]
-        bg["Break-glass<br/>own credential,<br/>excluded from CA"]
+        excl["Emergency exclusion<br/>group"]
+        bg["Break-glass<br/>own credential,<br/>Global Admin direct"]
+        jmlu["Users the JML<br/>agent creates"]
+        jmlg["JML groups<br/>static"]
     end
 
     subgraph APPS["SSO apps · assignment required"]
@@ -79,15 +82,26 @@ flowchart TB
 
     vm["Azure VM<br/>port 22 closed,<br/>reached over the tailnet"]
 
-    users --> groups
-    groups -->|"app assignment"| APPS
+    users -->|"department"| groups
+    users -->|"ITOps, Security"| roles
+    groups -->|"app assignment, P1"| APPS
     ca -->|"every sign-in"| APPS
-    mm --- vm
+    bg -->|"member"| excl
+    excl -->|"excluded from"| ca
+    jmlu --> jmlg
+    mm -->|"runs on"| vm
 ```
+
+Left out: the Tailscale sign-in app (a gallery app Terraform only looks up, and
+the tailnet doesn't sign in through Entra yet), the 10 stub apps and the Azure
+subscription roles (see [02-security-model.md](./docs/admin/02-security-model.md)).
+On today's Free tenant the P1 parts are frozen or unlicensed (see
+[Licensing](#licensing-what-needs-entra-id-p1)).
 
 ### Identity Journey
 
-From HR data to app access — fully automated:
+From HR data to app access, with one human review before apply. On today's
+Free tenant the P1 steps don't run, and app access needs direct user assignment.
 
 ```mermaid
 %%{init: {"flowchart": {"htmlLabels": false}}}%%
@@ -104,7 +118,7 @@ flowchart LR
     plan -->|"human review,<br/>then apply"| user
     user -->|"P1"| grp
     grp -->|"group assignment, P1"| apps
-    user -.->|"MFA through<br/>Conditional Access, P1"| apps
+    user -->|"signs in: MFA through<br/>Conditional Access, P1"| apps
 ```
 
 ---

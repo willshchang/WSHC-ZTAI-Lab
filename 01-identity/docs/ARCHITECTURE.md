@@ -3,7 +3,7 @@
 **Document Type:** Technical Architecture  
 **Author:** Will Chang, Zero Trust AI Engineer  
 **Audience:** IT Administrator  
-**Last Updated:** September 2026  
+**Last Updated:** October 2026  
 **Repository:** https://github.com/willshchang/WSHC-ZTAI-Lab  
 
 ---
@@ -76,46 +76,26 @@ two distinct security layers:
   are accepted.
 
 ### Identity Journey
-```
-A new TinyCo employee's identity flows through the following stages 
-automatically:
-HR CSV file (incoming/ dropzone)
-↓
-ETL pipeline (scripts/00-hr-data-etl.sh <employees.csv> <teams.csv>)
-↓ validates both files, strips BOM, standardises headers
-Clean CSV (data/)
-↓
-Terraform apply
-↓ reads CSV, provisions Entra account with all attributes
-Entra user account created
-↓ MFA enforced via Conditional Access
-ABAC dynamic group assignment (5–15 min)
-↓ department attribute triggers group membership
-App role assignment (setproduct matrix)
-↓ group membership grants app access
-SSO login (SAML/OIDC)
-↓ first login creates account in app via JIT
-SCIM sync (Tableau only, ~40 min)
-↓ account pre-created before first login
-Full access granted
-```
-```mermaid
-%%{init: {"flowchart": {"htmlLabels": false}}}%%
-flowchart LR
-    hr["HR export<br/>explicit files"]
-    etl["ETL script<br/>checks headers,<br/>teams, names"]
-    plan{"terraform plan<br/>roster guard"}
-    user["Entra account<br/>department set"]
-    grp["Team group<br/>dynamic rule"]
-    apps["SSO apps<br/>assignment required"]
 
-    hr --> etl
-    etl -->|"staged CSV"| plan
-    plan -->|"human review,<br/>then apply"| user
-    user -->|"P1"| grp
-    grp -->|"group assignment, P1"| apps
-    user -.->|"MFA through<br/>Conditional Access, P1"| apps
-```
+The diagram is in the [identity README](../README.md#identity-journey).
+
+A new TinyCo employee's identity goes through these stages, in order:
+
+1. HR drops the export in the `incoming/` dropzone.
+2. The ETL script (`scripts/00-hr-data-etl.sh <employees.csv> <teams.csv>`)
+   checks both files, strips the BOM, standardises headers and stages clean
+   CSVs in `data/`.
+3. `terraform plan` is reviewed (the roster guard stops a short file), then
+   `apply` creates the Entra account with every attribute, `department`
+   included.
+4. The ABAC dynamic group for that department picks the user up within 5 to
+   15 minutes (P1).
+5. The group's app assignments, from the `setproduct` matrix, give access to
+   the team's apps (P1).
+6. The user signs in with SSO (SAML or OIDC), with MFA from Conditional
+   Access (P1). The first sign-in creates the app account through JIT.
+7. Tableau only: SCIM (about every 40 minutes) creates the account ahead of
+   the first sign-in.
 
 ---
 
@@ -300,6 +280,8 @@ requiring IT intervention for routine identity operations, the system
 responds automatically to data changes at the source.
 
 ### The Self-Healing Chain
+
+```
 HR updates employee data
 ↓
 CSV updated in incoming/ → ETL pipeline → data/
@@ -313,6 +295,7 @@ setproduct matrix app assignments update automatically
 SCIM syncs to Tableau (~40 min)
 ↓
 User's access reflects their current role — zero IT intervention
+```
 
 ### Self-Healing Patterns
 
@@ -447,7 +430,7 @@ the app to SAML. Without this, Entra defaults to OIDC.
 ## Per-App RBAC Design
 
 ### Current Lab Approach
-```
+
 The lab uses a single `setproduct` matrix assigning all groups to all 
 apps. This satisfies the project brief's requirement that all team 
 members have access to specified applications.
@@ -458,12 +441,15 @@ In production, each app requiring role differentiation gets its own
 dedicated RBAC file. This mirrors enterprise IT policy management 
 where one policy handles one payload — clean audit logs, clear 
 ownership, safe rollbacks.
+
+```
 terraform-prod/
 ├── rbac-global.tf       ← company-wide apps (Mattermost, Tailscale)
 ├── rbac-tableau.tf      ← Tableau role assignments
 ├── rbac-elastic.tf      ← Elastic role assignments
 └── rbac-mattermost.tf   ← Mattermost admin assignments
 ```
+
 ### Least Privilege Role Matrix (Production)
 
 | Team | Tailscale | Mattermost | Tableau | Elastic |
@@ -650,12 +636,15 @@ E5.
 
 **Impact:** Instead of manually searching the Entra gallery, a 
 scripted workflow handles the decision:
+
+```
 scripts/01-gallery-lookup.sh [AppName]
 ↓ queries Microsoft Graph API for gallery templates
 Found in gallery?
 ↓ Yes → use azuread_application_template in Terraform
 ↓ No  → use custom azuread_application with SAML explicit
 terraform apply
+```
 
 This completes the IaC story — from HR data ingestion to app 
 registration, the entire identity stack is code-driven.

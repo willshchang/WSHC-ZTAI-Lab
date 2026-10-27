@@ -3,7 +3,7 @@
 **Document Type:** Admin Documentation  
 **Author:** Will Chang, Zero Trust AI Engineer  
 **Audience:** IT Administrator  
-**Last Updated:** September 2026  
+**Last Updated:** October 2026  
 **Repository:** https://github.com/willshchang/WSHC-ZTAI-Lab  
 
 ---
@@ -19,33 +19,8 @@ perform their role, nothing more.
 For the full architectural rationale and design decisions behind 
 this model, see [ARCHITECTURE.md](../ARCHITECTURE.md).
 
-```mermaid
-%%{init: {"flowchart": {"htmlLabels": false}}}%%
-flowchart TB
-    subgraph ENTRA["Entra ID · identity foundation"]
-        direction LR
-        users["Users<br/>from the HR CSV"]
-        groups["Team groups<br/>dynamic, P1"]
-        ca["Conditional Access<br/>MFA, no legacy auth, P1"]
-        roles["Admin roles<br/>static role groups"]
-        bg["Break-glass<br/>own credential,<br/>excluded from CA"]
-    end
-
-    subgraph APPS["SSO apps · assignment required"]
-        direction LR
-        mm["Mattermost<br/>SAML, on the VM"]
-        tb["Tableau Cloud<br/>SAML and SCIM"]
-        el["Elastic Cloud<br/>SAML, JIT accounts"]
-    end
-
-    vm["Azure VM<br/>port 22 closed,<br/>reached over the tailnet"]
-
-    users --> groups
-    groups -->|"app assignment"| APPS
-    ca -->|"every sign-in"| APPS
-    mm --- vm
-```
-[Showing Zero Trust two-layer model — Tailscale gates internal, Entra SSO gates SaaS]
+The identity foundation diagram is in the
+[identity README](../../README.md#zero-trust--two-layers).
 
 ---
 
@@ -96,7 +71,7 @@ resources without being on the Tailscale network.
 > as its identity provider, and using SCIM-synced Entra groups in 
 > the Tailscale ACL, is a planned step.
 
-See the security architecture diagram above.
+See the [identity foundation diagram](../../README.md#zero-trust--two-layers).
 
 ---
 
