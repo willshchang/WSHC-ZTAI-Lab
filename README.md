@@ -4,7 +4,7 @@
 
 **Document Type:** Repository Overview  
 **Author:** Will Chang, Zero Trust AI Engineer  
-**Last Updated:** October 2026  
+**Last Updated:** November 2026  
 **Repository:** https://github.com/willshchang/WSHC-ZTAI-Lab  
 
 ---
@@ -216,15 +216,23 @@ direct user assignment. See [Licensing](./01-identity/README.md#licensing-what-n
 
 ## Zero Trust Principles in This Lab
 
-Mapped to the tenets in NIST SP 800-207:
+The seven tenets of NIST SP 800-207 (section 2.1), in NIST's words. NIST
+calls them "the ideal goal" and notes that "not all tenets may be fully
+implemented in their purest form", so each row says where the lab falls short.
 
-| Principle | How this lab implements it |
+| SP 800-207 tenet | How this lab implements it |
 |---|---|
-| Every access request is authenticated and authorised | Entra ID SSO with MFA for apps, Tailscale identity and the ACL on every network connection, a policy check on every agent tool call, and human approval on every external write |
-| Least privilege | Role and app access by group, network access by explicit grant, implicit deny for everything else |
-| Access is decided per request, from identity and policy | Tailscale evaluates the ACL policy for each connection, not once at login |
-| Network location grants nothing | No "inside" network. Port 22 closed. Being on the tailnet alone gives no access. |
-| Policy is centrally managed and auditable | All policy in Terraform, version-controlled, reviewed and validated in CI |
+| 1. All data sources and computing services are considered resources | SSO apps, the Azure VM, devices behind the subnet routers and the outside systems the agents use (Microsoft Graph, Slack) each have their own access rule: an app assignment, an ACL grant or an agent's tool allowlist |
+| 2. All communication is secured regardless of network location | No "inside" network. Being on the tailnet alone gives no access, the ACL is default deny, and port 22 is closed to the internet. Tailscale encrypts traffic between tailnet devices; a device behind a subnet router is reached over the local network from the router |
+| 3. Access to individual enterprise resources is granted on a per-session basis | Tailscale checks the ACL for each connection, and `root` over SSH needs a recent browser sign-in (`check` mode). An SSO app issues a token only to users assigned to it, so access to one app gives nothing in another. Each agent tool call is checked on its own. Least privilege: roles and apps by assignment, network access by explicit grant, five Graph permissions for the JML agent |
+| 4. Access to resources is determined by dynamic policy | Policy is code: the ACL, Conditional Access and the agent policies, version-controlled, reviewed and validated in CI. Group membership follows the `department` attribute (dynamic groups need P1, so on today's Free tenant they are in code only). Gap: device state and behaviour are not inputs to any decision |
+| 5. The enterprise monitors and measures the integrity and security posture of all owned and associated assets | Gap: no device posture check and no monitoring of device state. For the agents' own code: Dependabot and `npm audit` ([threat model A16](./docs/THREAT_MODEL.md#layer-3-ai-agents)) |
+| 6. All resource authentication and authorization are dynamic and strictly enforced before access is allowed | Entra ID sign-in for SSO apps, with MFA through Conditional Access (in code, frozen on today's Free tenant). Tailscale identity and the ACL on every connection. A policy check on every agent tool call, and human approval on every external write |
+| 7. The enterprise collects as much information as possible about the current state of assets, network infrastructure and communications and uses it to improve its security posture | Partly: every agent run writes a trace, and Tailscale keeps configuration audit logs. Network flow logs need a Tailscale Premium or Enterprise plan. Nothing analyses this data automatically yet |
+
+For AI agents, NIST has also proposed ten design tenets for agent identity.
+The threat model maps the lab to them:
+[NIST agent identity tenets](./docs/THREAT_MODEL.md#nist-agent-identity-tenets).
 
 ---
 
@@ -402,6 +410,9 @@ terraform apply
 | Topic | URL |
 |---|---|
 | NIST SP 800-207 Zero Trust Architecture | https://csrc.nist.gov/pubs/sp/800/207/final |
+| NIST SP 800-207 (PDF, tenets in section 2.1) | https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-207.pdf |
+| NIST: Design Tenets for Agent Identity Management Systems (post #2) | https://www.nist.gov/blogs/cybersecurity-insights/design-tenets-agent-identity-management-systems |
+| NIST: Back to the Future: Why Agentic AI Needs a Strong Identity Foundation (post #1) | https://www.nist.gov/blogs/cybersecurity-insights/back-future-why-agentic-ai-needs-strong-identity-foundation |
 | OWASP Top 10 for LLM Applications (2025) | https://genai.owasp.org/initiatives/top-10-for-llm-and-genai/ |
 | OWASP Top 10 for Agentic Applications | https://genai.owasp.org/2025/12/09/owasp-top-10-for-agentic-applications-the-benchmark-for-agentic-security-in-the-age-of-autonomous-ai/ |
 | Microsoft Entra ID documentation | https://learn.microsoft.com/en-us/entra/identity/ |
