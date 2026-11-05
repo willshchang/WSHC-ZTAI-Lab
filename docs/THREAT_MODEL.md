@@ -3,7 +3,7 @@
 **Document Type:** Security Reference  
 **Author:** Will Chang, Zero Trust AI Engineer  
 **Audience:** Security, identity and platform engineers  
-**Last Updated:** October 2026  
+**Last Updated:** November 2026  
 **Repository:** https://github.com/willshchang/WSHC-ZTAI-Lab  
 
 ---
@@ -27,12 +27,47 @@ Agent risks are mapped to the
 [OWASP Top 10 for LLM Applications (2025)](https://genai.owasp.org/initiatives/top-10-for-llm-and-genai/)
 (`LLM01` to `LLM10`) and the
 [OWASP Top 10 for Agentic Applications](https://genai.owasp.org/2025/12/09/owasp-top-10-for-agentic-applications-the-benchmark-for-agentic-security-in-the-age-of-autonomous-ai/)
-(`ASI01` to `ASI10`). Every agent control with a named test below was also broken on
+(`ASI01` to `ASI10`). Rows with no match say n/a. Every agent control with a named test below was also broken on
 purpose in a mutation sweep (39 breaks, then 7 more after an
 independent review), and a test caught each one.
 
 The trust boundaries are drawn in the
 [security model diagram](../README.md#security-model).
+
+---
+
+## NIST agent identity tenets
+
+On October 27, 2026, NIST published ten
+[design tenets for agent identity, authentication and authorization](https://www.nist.gov/blogs/cybersecurity-insights/design-tenets-agent-identity-management-systems),
+the second post in its agentic identity series. The table maps each tenet to
+the rows below. This lab is where eZTrust runs and gets proven in public, and
+its agents (`03-agents/`) are the early version. The product is the
+**eZTrust Engine, a private build**. This file gives the engine's status for
+each tenet, never its design.
+
+Lab statuses use the legend above. The engine column adds three words:
+**Built in part** (parts are in code with tests, not yet on the live path),
+**Designed** (the design is settled, the code is not finished) and
+**Planned** (not built yet).
+
+| Tenet | Lab | eZTrust Engine (private build) |
+|---|---|---|
+| 01 Distinct Agent Identification | Partial: one key per agent, but a static secret, not proof of identity (A4, A18) | Planned: each agent signs in with its own directory identity |
+| 02 Agent Linking, Delegation & Attenuation | Partial: a worker is bound to the record in its task, but its authority isn't narrowed to the request (A3, A9, A19) | Partial: a claim to act for someone grants nothing |
+| 03 Least & Zero Standing Privilege | Partial: least privilege per agent, but the keys and Graph permissions are standing (A2, A5, I8, A18) | Designed: agents hold no access, they ask, and nobody approves their own or their agent's request |
+| 04 Short-Lived, Dynamic & Revocable Authorization | Partial: every tool call is checked and network auth keys expire in an hour, but agent keys don't expire (A1, A2, N3, A18) | Planned: single-use approvals bound to one action, short expiry, revoke and an emergency pause |
+| 05 Human-in-the-Loop Triggers | Built, fatigue Partial: a person approves every external write and sees the exact text (A1, A6, A7) | Designed: the product's core, with consent fatigue as its own threat |
+| 06 Mandates and Constraints | Partial: contracts and schema checks, nothing signed (A2, A9, see the note) | Partial: request types as templates, no signature |
+| 07 Architectural Separation of Policy from Reasoning | Built: the allowlists and approvals run in code outside the model (A1, A2, A4) | Built in part: policy is code; the model never decides |
+| 08 Deterministic Access Decisions | Built, chat gate Partial: access is decided by code; the chat gate is a word list (A2, A12) | Built in part: decisions are a pure function of structured fields |
+| 09 Continuous Monitoring | Gap: limits and traces exist, but nothing watches an agent over time (A11, A14, A15, A21) | Partial: per-agent limits and flags for a person to review; no anomaly detection yet |
+| 10 Immutable Evidence | Gap: traces are locked down, but the agent writes its own (A6, A15, A20) | Planned: an append-only, hash-chained record kept apart from any agent |
+
+**Tenet 06** is a note, not a row. The tenet allows mandates "established
+through organizationally defined templates". In the lab those are the
+contracts in `agents.json` (A9) and the schema checks on tool input (A2).
+Nothing signs them, in the lab or in the engine yet.
 
 ---
 
@@ -70,6 +105,10 @@ The trust boundaries are drawn in the
 | A15 | **Sensitive information in logs** | LLM02 | Traces | No secrets or webhook URLs in traces or errors. Trace files 0600, folder 0700. Hidden characters stored as escapes, so grepping a trace can't be spoofed. Real traces are gitignored. Redaction before central storage is planned with OpenTelemetry | Built, redaction Gap | `test:engine`, [trace README](../03-agents/examples/sample-traces/README.md) |
 | A16 | **Supply chain** | LLM03, ASI04 | Dependencies and CI | One direct runtime dependency (the Anthropic SDK), lockfile, `npm audit` clean. Actions pinned to commit SHAs, `contents: read`, no credentials left after checkout. Dependabot weekly | Built | `.github/`, `npm audit` |
 | A17 | **Unexpected code execution** | ASI05 | Agents | No agent has a shell, file-write or eval tool. Nothing the model says is executed as code | Built by design | Tool lists in each `policy.ts` |
+| A18 | **Static agent keys**: a leaked key works for whoever holds it, for as long as it lives | ASI03 | Model API client, Graph app | Each agent has its own API key (A4), but it is a static secret, not cryptographic proof of identity, and it doesn't expire when a task ends. The JML agent's Graph app signs in with a client secret, the same kind of static secret. Workload identity federation stays the planned next step (see Terms).<br>In the eZTrust Engine: each agent signs in with its own directory identity and gets short-lived tokens (planned) | Gap | `03-agents/core/model.ts`, `03-agents/jml/graph.ts` |
+| A19 | **Worker authority comes from its own key**: a worker can do everything its key and allowlist allow, whatever the request that started it | ASI03, ASI07 | Scarlet to worker | Scarlet holds no data tools, but a worker she starts acts with its own key and allowlist, so its authority isn't narrowed to the request. A worker's trace carries Scarlet's request id, so the runs are linked, but nothing signs that link. The id binding in A3 is the partial answer: the worker can only act on the record in its task.<br>In the eZTrust Engine: a claim to act for someone grants nothing, and a request can only become stricter as it moves | Partial | `test:jml`, `test:gtm`, `03-agents/core/trace.ts` |
+| A20 | **Traces are written by the agent process**: a compromised agent could change or delete its own record | n/a | Traces | Trace files are 0600 in a 0700 folder (on POSIX; Windows ignores the modes), and the trace holds a SHA-256 of the exact approval text shown (A6). But the process that acts is also the one that writes its trace, as plain lines appended to a file with nothing chained, so it could rewrite its own record.<br>In the eZTrust Engine: an append-only, hash-chained record kept apart from any agent (planned), with the chain head copied to immutable storage later | Gap | `03-agents/core/trace.ts` |
+| A21 | **No anomaly detection**: an agent that starts behaving differently, within its limits, goes unnoticed | n/a | Every agent | Traces, run errors and per-run limits exist (A11, A14, A15), but nothing watches an agent's behaviour across runs or alerts when it changes. Traces are read by hand after the fact.<br>In the eZTrust Engine: per-agent limits and flags for a person to review; no anomaly detection yet | Gap | [Investigating with traces](../03-agents/examples/sample-traces/README.md) |
 
 ---
 
@@ -125,6 +164,9 @@ The trust boundaries are drawn in the
 | OWASP LLM06 Excessive Agency | https://owasp.org/www-project-top-10-for-large-language-model-applications/2_0_vulns/LLM06_ExcessiveAgency.html |
 | OWASP Top 10 for Agentic Applications | https://genai.owasp.org/2025/12/09/owasp-top-10-for-agentic-applications-the-benchmark-for-agentic-security-in-the-age-of-autonomous-ai/ |
 | NIST SP 800-207 Zero Trust Architecture | https://csrc.nist.gov/pubs/sp/800/207/final |
+| NIST: Design Tenets for Agent Identity Management Systems (post #2, October 27, 2026) | https://www.nist.gov/blogs/cybersecurity-insights/design-tenets-agent-identity-management-systems |
+| NIST: Back to the Future: Why Agentic AI Needs a Strong Identity Foundation (post #1, August 27, 2026) | https://www.nist.gov/blogs/cybersecurity-insights/back-future-why-agentic-ai-needs-strong-identity-foundation |
+| Microsoft identity platform: access token lifetime | https://learn.microsoft.com/en-us/entra/identity-platform/access-tokens#token-lifetime |
 | Microsoft: emergency access accounts | https://learn.microsoft.com/en-us/entra/identity/role-based-access-control/security-emergency-access |
 | Microsoft: role-assignable groups | https://learn.microsoft.com/en-us/entra/identity/role-based-access-control/groups-concept |
 | Microsoft Graph: list transitive members | https://learn.microsoft.com/en-us/graph/api/group-list-transitivemembers |

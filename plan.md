@@ -1,67 +1,56 @@
-# Plan: one copy of each diagram, and the docs around them
+# Plan: map the lab to NIST's agent identity tenets, and fix the SP 800-207 table
 
-Brief: `Lab diagrams brief.md` from the reviewer chat, October 26, 2026, scope approved by Will.
-Branch `docs/diagram-cleanup` from `main` at `f7be4aa`. Docs only.
+Intent: `pr-in-progress/Lab-NIST-tenets-intent.md` (Will, November 4, 2026, status ready).
+Source: both NIST posts, captured in `resource-capture/NIST-agent-identity-posts-1-and-2.md`, and checked against the live pages (all ten tenet names match).
+Branch `docs/nist-agent-tenets` from `main` at `8798abc`. Docs only: `docs/THREAT_MODEL.md`, `README.md`, and this plan. The tooling freeze since PR #18 stands.
 
 ## Context
 
-The Lab had 11 Mermaid blocks. Four were copies of another block, and some no longer matched the code: the identity foundation left out the admin-group bridge and the break-glass exclusion, the network diagram used dotted lines for routes, and the Security Model kept friction reports behind approval. This PR keeps one copy of each diagram, swaps in corrected blocks, and fixes the broken fences and leftover text in the docs around them. The result is 7 blocks.
-
-Rules for diagrams on GitHub (agreed Oct 26):
-- GitHub's default look: no `classDef`, `linkStyle` or `style` lines; keep the `%%{init...}%%` line.
-- Solid lines move forward. Dotted lines are a write to the record or a log, or a reply. A path that only runs sometimes is solid, with the condition in its label.
-- One line under each diagram's title says what dotted means (if used) and what the diagram leaves out.
-- One copy of each diagram: it stays in its home file, and other files link to it.
+NIST published ten design tenets for agent identity, authentication and authorization on October 27, 2026 (post #2; post #1 was August 27). The threat model maps to OWASP and the README maps to SP 800-207, but nothing maps to the new tenets. The lab's agents are the early version of eZTrust; the product is the eZTrust Engine, a private build. Its status per tenet is given, never its design.
 
 ## Order of work
 
-1. Branch `docs/diagram-cleanup` from `main`.
-2. This plan as `plan.md`, committed first (`docs:`).
-3. Commits 1 to 3 below.
-4. Checks, push, PR. Will merges.
+1. This plan as `plan.md`, committed first (`docs:`).
+2. Commit: the threat model section and rows A18 to A21.
+3. Commit: the README tenet table, checked against the official SP 800-207 PDF.
+4. Run the five acceptance scenarios, push, open the PR. Will merges.
 
-## Commit 1: one copy of each diagram
+## Commit 2: `docs/THREAT_MODEL.md`
 
-| Diagram | Home | Copy replaced with a link |
-|---|---|---|
-| Identity foundation | `01-identity/README.md#zero-trust--two-layers` | `01-identity/docs/admin/02-security-model.md` |
-| Identity journey | `01-identity/README.md#identity-journey` | `README.md` (Identity Journey), `01-identity/docs/ARCHITECTURE.md` |
-| Network | `02-network/README.md#architecture` | `02-network/docs/03-Network_Architecture.md` |
+- New section **"NIST agent identity tenets"**, after "How to read this" and before "What we protect": one paragraph (what the tenets are, a link to post #2, the lab and engine positioning, no link to the engine), a short legend for the engine's status words, and a table of the ten tenets with NIST's exact names, numbered 01 to 10.
+- Columns: **Tenet** · **Lab** (status, a short reason, the row IDs) · **eZTrust Engine (private build)** (status plus at most one short principle-level phrase).
+- Lab statuses use the lab's own legend (Built, Partial, Gap), read from the rows cited. Where a tenet is mostly met with one weak part, the lab's existing form is used ("Built, fatigue Partial").
+- A note under the table for tenet 06: the `agents.json` contracts and the schema checks are the "organizationally defined templates" the tenet allows; nothing signs them, in the lab or the engine yet.
+- New Layer 3 rows A18 to A21. Each Control cell says what the lab does today, then one line starting "In the eZTrust Engine:".
+  - A18 Static agent keys (tenets 01, 04). Also names the JML Graph app's client secret (`jml/graph.ts`), which is the same kind of static secret.
+  - A19 Worker authority comes from its own key (tenet 02). A3's id binding is the partial answer.
+  - A20 Traces are written by the agent process (tenet 10).
+  - A21 No anomaly detection (tenet 09).
+- A20 and A21 have no OWASP match, so they say n/a; "How to read this" gains one sentence saying so.
+- Last Updated: November 2026. Official References: post #2, post #1, and the Microsoft page on access token lifetime (backs "short-lived tokens" in A18).
+- Existing rows keep their IDs and wording.
 
-Each link is one sentence. `README.md` keeps its numbered steps. `02-security-model.md` loses the leftover caption, and "See the security architecture diagram above" points at the link. The network copy's caption goes with it, since the home README says the same.
+## Engine statuses
 
-## Commit 2: the diagrams
+Engine statuses are taken from the private build's own threat model, read only. Where it and the intent disagree, the stricter word is used; the cases are listed in the handoff, outside the repo.
 
-- `README.md`, Security Model: new block (the checks box names policy, schema and risk tier; friction reports reach Slack with no approval). Legend: "Dotted: written to the trace. Left out: JML's `#jml-status` card and the system alerts in `#agent-feedback`, which code posts to Slack itself, not through these checks."
-- `01-identity/README.md`: new foundation block (admin roles bridge, break-glass exclusion, JML groups) and new journey block (MFA at sign-in is solid, not dotted). The journey's heading line says one human review comes before apply, and what the Free tenant changes.
-- `02-network/README.md`: new block (exit node as a solid conditional path, router 2 takes over on failure, internet node). The note says every arrow from the engineer devices is an `acl.tf` grant.
-- `03-agents/README.md`: new How an Agent Runs block (refusals reply to the model, dotted). Scarlet keeps its block and gains a legend line.
-- `README.md` overview: no change.
+## Commit 3: `README.md`
 
-Legend lines go right above the block when the brief says "under the title", and right below it when it says "under it".
+After the first build, tenet 4 was changed to quote the full first sentence of section 2.1, unshortened.
 
-## Commit 3: the docs around them
+Checked against SP 800-207 section 2.1 in the official PDF (nvlpubs.nist.gov). Today's table says "Mapped to the tenets" but has five rows that are not the tenets: "Policy is centrally managed and auditable" is not one of the seven; "decided per request" says more than NIST's "per-session"; tenets 1, 5 and 7 are missing; and "Entra ID SSO with MFA" leaves out that Conditional Access is frozen on today's Free tenant.
 
-- `03-Network_Architecture.md`: remove the pasted chat text; keep one RFC 1918 section (the longer one); move Site B and Engineer Devices back under Network Topology; fence the five unfenced diagrams, re-indenting the lab VNet tree so its nesting shows.
-- `ARCHITECTURE.md`: fix the four broken fences; the Identity Journey becomes a numbered list in the order things happen.
-- `README.md`: Layer 3 reads as built, with next steps, in Repository Structure and Roadmap; the SSO row says the Tailscale app exists in Entra but the tailnet doesn't sign in through Entra yet.
-- `03-agents/README.md`, Act first: name all four models that reject forced tool calls (Opus 5.5, Sonnet 5.5, Fable 5.1, Mythos 5.1), as `core/model.ts`, `tests/act-first.ts` and Anthropic's [Define tools](https://platform.claude.com/docs/en/agents-and-tools/tool-use/define-tools#forcing-tool-use) page do.
-- Last Updated: October 2026 on every changed file.
+**Open question from the intent, proposed answer: list all seven tenets.** Each row quotes NIST's tenet sentence and says how the lab meets it, with a plain Gap where it doesn't (device posture, behaviour signals). Why: fewer rows under an accurate heading would hide exactly the tenets the lab misses, and seven rows mirror the new agent tenet table. The policy-as-code content moves into tenet 4, where NIST defines policy. Will can ask for the shorter form in review.
 
-## Decisions
-
-- No "left out" lines for the overview, the identity journey, the network or Scarlet: their paragraph, heading line or note already says it.
-- How an Agent Runs doesn't draw the two extra refusals on external writes (control characters, tool not ready). It is a summary.
-- No local mermaid-cli render. The reviewer rendered the blocks; Will checks GitHub in light and dark.
+Also: one line pointing to the new threat model section, Last Updated November 2026, and post #2, post #1 and the SP 800-207 PDF in Official References.
 
 ## Checks
 
-- Every Mermaid block with file and line: 7, no two the same, no styling lines, every dotted edge a trace write or a reply.
-- Fences balanced in every changed file; no control or hidden Unicode characters.
-- `cd 03-agents && npm run typecheck && npm test`, with the count.
-- `git diff --name-only main`: only the Markdown files named here and `plan.md`.
-- After the push, the rendered HTML from GitHub's API has each link's target heading id.
+- The five acceptance scenarios, run as searches on the branch.
+- Every new row ID cited exists; every anchor link resolves; no em dashes or control characters in the changed files.
+- No Mermaid changes, so no render step. No code changes, so `npm test` is not affected; it is run anyway.
 
-## Review
+## Risks
 
-Runs in Will's other session, read-only. The reviewer reports, the writer fixes, Will merges.
+- A public reader could take engine statuses as product claims. Every engine phrase is principle-level, and each status is the stricter of the two sources.
+- The lab statuses are judgement calls on whole tenets. Each one names its rows so a reader can check.
