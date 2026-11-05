@@ -32,20 +32,11 @@ NIST published ten design tenets for agent identity, authentication and authoriz
 
 ## Engine statuses
 
-Taken from ZTAI's `docs/THREAT_MODEL.md` on `main` at `a427407`, read only. Where the intent's table and that doc disagree, the stricter word is used, and the handoff lists every case. Found while planning:
-
-| Tenet | Intent | ZTAI doc | Used |
-|---|---|---|---|
-| 01 | Planned | Agent impersonation row: Partial (checks in the policy core; the agent's own sign-in is planned) | Planned (stricter) |
-| 03 | Designed | Self-approval row: Partial; executor reach row: Planned | Designed (stricter than Partial) |
-| 05 | Designed | Approval fatigue row: Partial; push-bombing row: Planned | Designed (stricter than Partial) |
-| 07, 08 | Built in part | "A model decides" row: Partial | Built in part (claims no more than Partial) |
-| 09 | Partial, "per-agent limits ... anomaly detection on the roadmap" | Friction row: Partial; pending cap per identity: Planned; anomaly detection not in any ZTAI doc | Partial: "per-agent limits and flags for a person to review; no anomaly detection yet" (Will's wording after the first build, so the lab names no engine mechanism) |
-| 10 | Planned | Record row: Planned; chain head copy to immutable storage: Later | Planned, and A20 says the immutable copy comes later |
-
-Statuses 02, 04 and 06 agree. After the first build, Will set tenet 04's phrase to "an emergency pause" instead of "a kill switch", and A21's engine line to the same wording as tenet 09. README tenet 4 quotes the full first sentence of section 2.1, unshortened.
+Engine statuses are taken from the private build's own threat model, read only. Where it and the intent disagree, the stricter word is used; the cases are listed in the handoff, outside the repo.
 
 ## Commit 3: `README.md`
+
+After the first build, tenet 4 was changed to quote the full first sentence of section 2.1, unshortened.
 
 Checked against SP 800-207 section 2.1 in the official PDF (nvlpubs.nist.gov). Today's table says "Mapped to the tenets" but has five rows that are not the tenets: "Policy is centrally managed and auditable" is not one of the seven; "decided per request" says more than NIST's "per-session"; tenets 1, 5 and 7 are missing; and "Entra ID SSO with MFA" leaves out that Conditional Access is frozen on today's Free tenant.
 
