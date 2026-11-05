@@ -40,10 +40,10 @@ Taken from ZTAI's `docs/THREAT_MODEL.md` on `main` at `a427407`, read only. Wher
 | 03 | Designed | Self-approval row: Partial; executor reach row: Planned | Designed (stricter than Partial) |
 | 05 | Designed | Approval fatigue row: Partial; push-bombing row: Planned | Designed (stricter than Partial) |
 | 07, 08 | Built in part | "A model decides" row: Partial | Built in part (claims no more than Partial) |
-| 09 | Partial, "per-agent limits ... anomaly detection on the roadmap" | Friction row: Partial; pending cap per identity: Planned; anomaly detection not in any ZTAI doc | Partial, with the phrase narrowed: per-agent request types and friction flags, pending cap planned, no anomaly detection yet |
+| 09 | Partial, "per-agent limits ... anomaly detection on the roadmap" | Friction row: Partial; pending cap per identity: Planned; anomaly detection not in any ZTAI doc | Partial: "per-agent limits and flags for a person to review; no anomaly detection yet" (Will's wording after the first build, so the lab names no engine mechanism) |
 | 10 | Planned | Record row: Planned; chain head copy to immutable storage: Later | Planned, and A20 says the immutable copy comes later |
 
-Statuses 02, 04 and 06 agree.
+Statuses 02, 04 and 06 agree. After the first build, Will set tenet 04's phrase to "an emergency pause" instead of "a kill switch", and A21's engine line to the same wording as tenet 09. README tenet 4 quotes the full first sentence of section 2.1, unshortened.
 
 ## Commit 3: `README.md`
 
